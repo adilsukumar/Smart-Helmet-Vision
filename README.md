@@ -71,7 +71,7 @@ Install the Python packages first:
 
 ```bash
 cd backend
-python -m pip install -r requirements.txt
+python -m pip install -r ml-requirements.txt
 ```
 
 Then give the program a video/camera source and custom model weights:
@@ -83,7 +83,7 @@ python helmet_system.py \
   --display
 ```
 
-A normal object-detection model is not enough for helmet compliance. The model needs classes that match the project configuration, including helmet/no-helmet and motorcycle-related objects. Camera regions and the stop line can be changed in `backend/configs/traffic_demo.json`.
+A normal object-detection model is not enough for helmet compliance. The model needs classes that match the project configuration, including helmet/no-helmet and motorcycle-related objects. Camera regions and the stop line can be changed in `backend/traffic_demo.json`.
 
 ## Training direction
 
