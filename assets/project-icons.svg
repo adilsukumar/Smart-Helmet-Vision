@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 100" role="img" aria-label="Helmet, three riders and traffic signal icons">
+  <g transform="translate(10 10)">
+    <circle cx="40" cy="40" r="38" fill="#172a34"/>
+    <path d="M19 45c0-18 9-29 25-29 15 0 25 11 25 28v5H47c-3 0-5 2-5 5v9H25V53c-4-1-6-4-6-8Z" fill="#efc23c"/>
+    <path d="M47 49h22" stroke="#f4f3ed" stroke-width="5" stroke-linecap="round"/>
+  </g>
+  <g transform="translate(140 10)">
+    <circle cx="40" cy="40" r="38" fill="#172a34"/>
+    <circle cx="24" cy="25" r="9" fill="#efc23c"/><circle cx="42" cy="22" r="9" fill="#efc23c"/><circle cx="59" cy="26" r="9" fill="#e35a49"/>
+    <path d="M23 37v24m19-27v27m17-23v23" stroke="#f4f3ed" stroke-width="9" stroke-linecap="round"/>
+    <path d="M14 64h55" stroke="#69d69b" stroke-width="5" stroke-linecap="round"/>
+  </g>
+  <g transform="translate(270 10)">
+    <circle cx="40" cy="40" r="38" fill="#172a34"/>
+    <rect x="26" y="8" width="28" height="54" rx="7" fill="#081116" stroke="#71838a" stroke-width="2"/>
+    <circle cx="40" cy="21" r="8" fill="#e74c3c"/><circle cx="40" cy="35" r="8" fill="#806e2e"/><circle cx="40" cy="49" r="8" fill="#28573e"/>
+    <path d="M40 62v13" stroke="#f4f3ed" stroke-width="5"/>
+  </g>
+</svg>

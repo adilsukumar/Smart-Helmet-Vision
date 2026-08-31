@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { StrictMode, useEffect, useMemo, useRef, useState } from "react";
+import { createRoot } from "react-dom/client";
+import "./styles.css";
 
 type ScenarioId = "combined" | "helmet" | "triple" | "signal" | "safe";
 type Rule = "NO_HELMET" | "TRIPLE_RIDING" | "RED_LIGHT_CROSSING";
@@ -355,4 +357,8 @@ function App() {
   );
 }
 
-export default App;
+createRoot(document.getElementById("root")!).render(
+  <StrictMode>
+    <App />
+  </StrictMode>,
+);

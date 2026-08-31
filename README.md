@@ -8,11 +8,15 @@ This started as an internship research task. I didn't want to submit only a docu
 
 The project watches a motorcycle across a few frames and checks three things: helmet use, triple riding and crossing the stop line while the signal is red. The website is the easy-to-open version for a reviewer. The Python folder is where the actual camera and rule-engine work lives.
 
+<p align="center">
+  <img src="assets/project-icons.svg" width="360" alt="Helmet, riders and signal icons" />
+</p>
+
 <table>
   <tr>
-    <td align="center" width="33%"><img src="assets/helmet-icon.svg" width="54" alt="Helmet icon" /><br><b>Helmet check</b><br><sub>Waits for the result to stay consistent</sub></td>
-    <td align="center" width="33%"><img src="assets/riders-icon.svg" width="54" alt="Three riders icon" /><br><b>Triple riding</b><br><sub>Associates riders with one bike track</sub></td>
-    <td align="center" width="33%"><img src="assets/signal-icon.svg" width="54" alt="Traffic signal icon" /><br><b>Signal crossing</b><br><sub>Checks line crossing only during red</sub></td>
+    <td align="center" width="33%"><b>Helmet check</b><br><sub>Waits for the result to stay consistent</sub></td>
+    <td align="center" width="33%"><b>Triple riding</b><br><sub>Associates riders with one bike track</sub></td>
+    <td align="center" width="33%"><b>Signal crossing</b><br><sub>Checks line crossing only during red</sub></td>
   </tr>
 </table>
 
@@ -49,8 +53,8 @@ pnpm preview
 
 ```bash
 cd backend
-python -m scripts.simulate_traffic
-python -m unittest discover -s tests -v
+python helmet_system.py --demo
+python -m unittest -v test_helmet_system.py
 ```
 
 The controlled simulation should print one event for each rule:
@@ -73,7 +77,7 @@ python -m pip install -r requirements.txt
 Then give the program a video/camera source and custom model weights:
 
 ```bash
-python -m traffic_system.app \
+python helmet_system.py \
   --source path/to/video.mp4 \
   --model path/to/custom_helmet_model.pt \
   --display
@@ -87,12 +91,12 @@ I used AI City Challenge 2024 Track 5 as the main dataset reference. The convers
 
 ```bash
 cd backend
-python -m scripts.convert_aicity_track5 \
+python training.py convert \
   --frames-root path/to/frames \
   --annotations path/to/groundtruth.txt \
   --out data/aicity_yolo
 
-python -m scripts.train_traffic \
+python training.py train \
   --data data/aicity_yolo/dataset.yaml \
   --model yolo11n.pt \
   --epochs 50 \
@@ -104,11 +108,12 @@ Training should be done on a laptop GPU or cloud notebook. The smaller exported 
 ## Project layout
 
 ```text
-src/                       browser demo
-backend/traffic_system/    camera, tracking and rule engine
-backend/scripts/           simulation, conversion and training scripts
-backend/tests/             rule-engine tests
-assets/                    SVG artwork used in this README
+src/App.tsx                browser demo and page entry
+src/styles.css             page styling and motion
+backend/helmet_system.py   camera, rules and controlled demo
+backend/training.py        dataset conversion and training
+backend/test_helmet_system.py
+assets/                    two SVG artwork files
 ```
 
 ## Deploying it
@@ -125,4 +130,3 @@ Push the repository to GitHub, open Vercel, choose **New Project**, and import t
 ## One honest limitation
 
 The rule engine is tested, but I am not calling this a finished traffic-enforcement system. Real accuracy numbers need trained weights and test footage from the actual road/camera angle. Any event should go to a person for review; it should not become an automatic challan or an identity-recognition system.
-
