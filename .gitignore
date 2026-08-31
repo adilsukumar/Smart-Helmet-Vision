@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.vercel/
+__pycache__/
+*.pyc
+*.tsbuildinfo
+runs/
+data/
+*.pt
+*.onnx
+*.ncnn
+.env
+.env.*

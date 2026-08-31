@@ -1,0 +1,9 @@
+{
+  "history_window": 10,
+  "confirmation_hits": 6,
+  "triple_rider_count": 3,
+  "stop_line": [[0.12, 0.72], [0.9, 0.72]],
+  "violation_side": -1,
+  "signal_roi": [0.82, 0.05, 0.94, 0.3]
+}
+

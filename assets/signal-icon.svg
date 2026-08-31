@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Traffic signal">
+  <circle cx="32" cy="32" r="30" fill="#172a34"/>
+  <rect x="21" y="8" width="22" height="42" rx="6" fill="#081116" stroke="#71838a" stroke-width="2"/>
+  <circle cx="32" cy="18" r="6" fill="#e74c3c"/><circle cx="32" cy="29" r="6" fill="#806e2e"/><circle cx="32" cy="40" r="6" fill="#28573e"/>
+  <path d="M32 50v8" stroke="#f4f3ed" stroke-width="4"/>
+</svg>
+

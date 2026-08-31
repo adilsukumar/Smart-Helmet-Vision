@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Helmet">
+  <circle cx="32" cy="32" r="30" fill="#172a34"/>
+  <path d="M15 36c0-14 7-23 20-23 12 0 20 9 20 22v4H37c-2 0-4 2-4 4v7H20v-8c-3-1-5-3-5-6Z" fill="#efc23c"/>
+  <path d="M37 39h18" stroke="#f4f3ed" stroke-width="4" stroke-linecap="round"/>
+</svg>
+

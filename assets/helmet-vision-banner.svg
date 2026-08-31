@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 440" role="img" aria-labelledby="title desc">
+  <title id="title">Smart Helmet Vision</title>
+  <desc id="desc">An animated motorcycle crosses a camera view with detection boxes and a traffic signal.</desc>
+  <defs>
+    <pattern id="grid" width="42" height="42" patternUnits="userSpaceOnUse">
+      <path d="M42 0H0V42" fill="none" stroke="#29434f" stroke-width="1" opacity=".45"/>
+    </pattern>
+    <linearGradient id="sky" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#172a34"/>
+      <stop offset="1" stop-color="#0d171c"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="440" rx="22" fill="url(#sky)"/>
+  <rect width="1200" height="440" rx="22" fill="url(#grid)"/>
+  <path d="M0 330H1200" stroke="#e5c657" stroke-width="5" stroke-dasharray="36 26" opacity=".9">
+    <animate attributeName="stroke-dashoffset" from="0" to="-62" dur="2s" repeatCount="indefinite"/>
+  </path>
+  <path d="M850 210V420" stroke="#edf0e8" stroke-width="9" stroke-dasharray="18 11" opacity=".85"/>
+  <g transform="translate(1018 78)">
+    <rect width="58" height="145" rx="9" fill="#071015" stroke="#4c626b" stroke-width="2"/>
+    <circle cx="29" cy="31" r="15" fill="#e74c3c">
+      <animate attributeName="opacity" values="1;.45;1" dur="1.8s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="29" cy="72" r="15" fill="#5d5126"/>
+    <circle cx="29" cy="113" r="15" fill="#173f2c"/>
+    <path d="M29 145v86" stroke="#64757c" stroke-width="8"/>
+  </g>
+  <g>
+    <animateTransform attributeName="transform" type="translate" values="-210 0;690 0;690 0;-210 0" keyTimes="0;.72;.82;1" dur="8s" repeatCount="indefinite"/>
+    <rect x="88" y="175" width="215" height="150" fill="none" stroke="#5dc7e8" stroke-width="3" stroke-dasharray="9 6"/>
+    <rect x="91" y="151" width="132" height="23" rx="3" fill="#15394b"/>
+    <text x="101" y="167" fill="#e9f5fa" font-family="monospace" font-size="13">bike #07 0.95</text>
+    <circle cx="125" cy="326" r="35" fill="#10191d" stroke="#8fa1a8" stroke-width="9"/>
+    <circle cx="261" cy="326" r="35" fill="#10191d" stroke="#8fa1a8" stroke-width="9"/>
+    <path d="M125 326l54-63 50 61 32 2m-82-63 69-3m-19 64-29-109" fill="none" stroke="#d85b49" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+    <g stroke-width="3">
+      <rect x="145" y="165" width="55" height="113" fill="none" stroke="#69d69b"/>
+      <circle cx="172" cy="190" r="22" fill="#efc23c" stroke="#172128"/>
+      <path d="M172 214v61" stroke="#6f8995" stroke-width="22" stroke-linecap="round"/>
+      <rect x="193" y="160" width="55" height="113" fill="none" stroke="#69d69b"/>
+      <circle cx="220" cy="185" r="22" fill="#efc23c" stroke="#172128"/>
+      <path d="M220 209v61" stroke="#637c88" stroke-width="22" stroke-linecap="round"/>
+      <rect x="241" y="155" width="55" height="113" fill="none" stroke="#f06a5b"/>
+      <circle cx="268" cy="180" r="22" fill="#b97b63" stroke="#172128"/>
+      <path d="M268 204v61" stroke="#58707b" stroke-width="22" stroke-linecap="round"/>
+    </g>
+  </g>
+  <rect x="0" y="0" width="7" height="440" fill="#e85e4d">
+    <animate attributeName="x" values="0;1193;0" dur="5.5s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0;.75;0" dur="5.5s" repeatCount="indefinite"/>
+  </rect>
+  <g font-family="Arial, sans-serif" fill="#f4f3ed">
+    <text x="58" y="72" font-size="18" font-weight="700" letter-spacing="4" fill="#e35a49">RASPBERRY PI + CAMERA + ML</text>
+    <text x="58" y="126" font-size="48" font-weight="800">Smart Helmet Vision</text>
+    <text x="60" y="160" font-size="18" fill="#a8b7bd">helmet · triple riding · red-light crossing</text>
+  </g>
+</svg>
+
