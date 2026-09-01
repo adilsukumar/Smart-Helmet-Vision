@@ -8,6 +8,7 @@ runs/
 data/
 *.pt
 *.onnx
+!public/models/*.onnx
 *.ncnn
 .env
 .env.*

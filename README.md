@@ -6,7 +6,7 @@
 
 This started as an internship research task. I didn't want to submit only a document or a notebook, so I made a small working demo too.
 
-The project watches a motorcycle across several frames and checks three things: helmet use, triple riding and crossing the stop line while the signal is red. The website now includes a processed real traffic clip, not only the animated rule demo. The Python folder is where the camera, model and rule-engine work lives.
+The project watches motorcycles and riders in video and checks three things: helmet use, triple riding and crossing the stop line while the signal is red. The website can now run the two detection models on a video selected from your device. The Python folder is where the camera, tracking and full rule-engine work lives.
 
 <p align="center">
   <img src="assets/project-icons.svg" width="360" alt="Helmet, riders and signal icons" />
@@ -22,20 +22,20 @@ The project watches a motorcycle across several frames and checks three things: 
 
 ## What is here
 
-The first thing on the browser demo is a real 12.5-second road video processed with two models. YOLO11 handles motorcycle/person tracking, and a separate helmet model predicts `With Helmet` or `Without Helmet`. The page also keeps five small simulated cases so each rule is easy to test on demand.
+The first part of the website is a normal video player with a file picker. YOLO11 finds motorcycles and people in the current frame, while a separate helmet model predicts `With Helmet` or `Without Helmet`. The boxes are drawn live in the browser; they are not part of the video. The selected file stays on the device and is not uploaded. The page also keeps five small simulated cases so each rule is easy to test on demand.
 
 The `backend` folder has the Python code for video input, tracking, rider-to-bike matching, stop-line crossing, event confirmation and saving evidence. It also has a small deterministic simulation and six unit tests.
 
 At the moment:
 
-- the full real clip is included as a browser-friendly annotated video;
+- MP4, WebM and other browser-supported videos can be selected from the page;
+- both ONNX models run locally in the browser;
 - the website builds and runs;
 - the combined demo gives all three expected events;
 - all six Python tests pass;
-- this traffic run produced 4 no-helmet and 2 triple-riding candidates;
 - Raspberry Pi speed testing and training on footage from the final camera angle are still left to do.
 
-Those numbers are model suggestions, not verified ground truth. The crowded right edge makes some rider-to-bike associations uncertain. I also left signal jumping unevaluated for the real clip because it has no usable traffic signal and calibrated stop line. I would rather show that limitation than draw a made-up line and call it a detection.
+The first model download is fairly large and inference speed depends on the laptop or phone. The output is still a model suggestion rather than verified ground truth. Signal jumping is not guessed for arbitrary uploads because that rule needs a fixed, calibrated stop line and signal region.
 
 ## Running the website
 
@@ -120,7 +120,8 @@ src/styles.css             page styling and motion
 backend/helmet_system.py   camera, rules and controlled demo
 backend/training.py        dataset conversion and training
 backend/test_helmet_system.py
-public/real-traffic-demo.mp4   processed full demo clip
+public/sample-traffic.mp4     normal unmarked sample video
+public/models/                browser-ready ONNX models
 assets/                    two SVG artwork files
 ```
 

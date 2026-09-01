@@ -1,5 +1,6 @@
 import { StrictMode, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
+import * as ort from "onnxruntime-web/wasm";
 import "./styles.css";
 
 type ScenarioId = "combined" | "helmet" | "triple" | "signal" | "safe";
@@ -91,6 +92,288 @@ const ruleCopy: Record<Rule, { short: string; detail: string; threshold: number;
   },
 };
 
+type VideoBox = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  score: number;
+  classId: number;
+  label: string;
+};
+
+type FrameResult = {
+  bikes: number;
+  riders: number;
+  noHelmet: number;
+  triple: number;
+  took: number;
+};
+
+const inputSize = 416;
+let browserModels: Promise<{ traffic: ort.InferenceSession; helmet: ort.InferenceSession }> | null = null;
+
+function loadBrowserModels() {
+  if (!browserModels) {
+    ort.env.wasm.numThreads = 1;
+    ort.env.wasm.proxy = false;
+    browserModels = Promise.all([
+      ort.InferenceSession.create("/models/traffic.onnx", { executionProviders: ["wasm"] }),
+      ort.InferenceSession.create("/models/helmet.onnx", { executionProviders: ["wasm"] }),
+    ]).then(([traffic, helmet]) => ({ traffic, helmet }));
+  }
+  return browserModels;
+}
+
+function overlap(a: VideoBox, b: VideoBox) {
+  const x = Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x));
+  const y = Math.max(0, Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y));
+  const intersection = x * y;
+  return intersection / (a.width * a.height + b.width * b.height - intersection || 1);
+}
+
+function nms(boxes: VideoBox[], threshold = 0.45) {
+  const kept: VideoBox[] = [];
+  for (const box of [...boxes].sort((a, b) => b.score - a.score)) {
+    if (kept.length >= 80) break;
+    if (!kept.some((item) => item.classId === box.classId && overlap(item, box) > threshold)) kept.push(box);
+  }
+  return kept;
+}
+
+function readOutput(
+  tensor: ort.Tensor,
+  classes: Array<{ id: number; label: string }>,
+  scale: number,
+  padX: number,
+  padY: number,
+  videoWidth: number,
+  videoHeight: number,
+  minimum: number,
+) {
+  const channels = tensor.dims[1];
+  const anchors = tensor.dims[2];
+  const values = tensor.data as Float32Array;
+  const boxes: VideoBox[] = [];
+  for (let index = 0; index < anchors; index += 1) {
+    let selected = classes[0];
+    let score = 0;
+    for (const item of classes) {
+      const value = values[(4 + item.id) * anchors + index];
+      if (value > score) {
+        score = value;
+        selected = item;
+      }
+    }
+    if (score < minimum) continue;
+    const centerX = values[index];
+    const centerY = values[anchors + index];
+    const width = values[anchors * 2 + index];
+    const height = values[anchors * 3 + index];
+    const x1 = Math.max(0, (centerX - width / 2 - padX) / scale);
+    const y1 = Math.max(0, (centerY - height / 2 - padY) / scale);
+    const x2 = Math.min(videoWidth, (centerX + width / 2 - padX) / scale);
+    const y2 = Math.min(videoHeight, (centerY + height / 2 - padY) / scale);
+    if (x2 > x1 && y2 > y1) boxes.push({ x: x1, y: y1, width: x2 - x1, height: y2 - y1, score, classId: selected.id, label: selected.label });
+  }
+  return nms(boxes);
+}
+
+function prepareFrame(video: HTMLVideoElement, scratch: HTMLCanvasElement) {
+  scratch.width = inputSize;
+  scratch.height = inputSize;
+  const context = scratch.getContext("2d", { willReadFrequently: true })!;
+  const scale = Math.min(inputSize / video.videoWidth, inputSize / video.videoHeight);
+  const width = video.videoWidth * scale;
+  const height = video.videoHeight * scale;
+  const padX = (inputSize - width) / 2;
+  const padY = (inputSize - height) / 2;
+  context.fillStyle = "rgb(114, 114, 114)";
+  context.fillRect(0, 0, inputSize, inputSize);
+  context.drawImage(video, padX, padY, width, height);
+  const pixels = context.getImageData(0, 0, inputSize, inputSize).data;
+  const input = new Float32Array(3 * inputSize * inputSize);
+  const plane = inputSize * inputSize;
+  for (let i = 0; i < plane; i += 1) {
+    input[i] = pixels[i * 4] / 255;
+    input[plane + i] = pixels[i * 4 + 1] / 255;
+    input[plane * 2 + i] = pixels[i * 4 + 2] / 255;
+  }
+  return { tensor: new ort.Tensor("float32", input, [1, 3, inputSize, inputSize]), scale, padX, padY };
+}
+
+function pointInside(box: VideoBox, x: number, y: number, upperOnly = false) {
+  const bottom = upperOnly ? box.y + box.height * 0.68 : box.y + box.height;
+  return x >= box.x && x <= box.x + box.width && y >= box.y && y <= bottom;
+}
+
+function drawTag(context: CanvasRenderingContext2D, box: VideoBox, text: string, color: string) {
+  context.strokeStyle = color;
+  context.lineWidth = Math.max(2, context.canvas.width / 600);
+  context.strokeRect(box.x, box.y, box.width, box.height);
+  context.font = `${Math.max(15, context.canvas.width / 70)}px ui-monospace, monospace`;
+  const textWidth = context.measureText(text).width + 12;
+  const top = Math.max(0, box.y - 25);
+  context.fillStyle = color;
+  context.fillRect(box.x, top, textWidth, 25);
+  context.fillStyle = "#fff";
+  context.fillText(text, box.x + 6, top + 18);
+}
+
+function LiveVideoDetector() {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const overlayRef = useRef<HTMLCanvasElement>(null);
+  const scratchRef = useRef(document.createElement("canvas"));
+  const modelsRef = useRef<{ traffic: ort.InferenceSession; helmet: ort.InferenceSession } | null>(null);
+  const objectUrl = useRef<string | null>(null);
+  const running = useRef(false);
+  const lastRun = useRef(0);
+  const animation = useRef(0);
+  const [modelState, setModelState] = useState("Loading detection models…");
+  const [fileName, setFileName] = useState("Built-in road sample");
+  const [result, setResult] = useState<FrameResult>({ bikes: 0, riders: 0, noHelmet: 0, triple: 0, took: 0 });
+
+  const analyse = async () => {
+    const video = videoRef.current;
+    const overlay = overlayRef.current;
+    const models = modelsRef.current;
+    if (!video || !overlay || !models || video.readyState < 2 || running.current || !video.videoWidth) return;
+    running.current = true;
+    const started = performance.now();
+    try {
+      const frame = prepareFrame(video, scratchRef.current);
+      const input = { images: frame.tensor };
+      const [trafficOutput, helmetOutput] = await Promise.all([models.traffic.run(input), models.helmet.run(input)]);
+      const common = [frame.scale, frame.padX, frame.padY, video.videoWidth, video.videoHeight] as const;
+      const trafficTensor = trafficOutput[models.traffic.outputNames[0]];
+      const helmetTensor = helmetOutput[models.helmet.outputNames[0]];
+      const traffic = readOutput(trafficTensor, [{ id: 0, label: "person" }, { id: 3, label: "motorcycle" }], ...common, 0.28);
+      const helmets = readOutput(helmetTensor, [{ id: 0, label: "helmet" }, { id: 1, label: "no helmet" }], ...common, 0.22);
+      const people = traffic.filter((box) => box.label === "person");
+      const bikes = traffic.filter((box) => box.label === "motorcycle");
+      overlay.width = video.videoWidth;
+      overlay.height = video.videoHeight;
+      const context = overlay.getContext("2d")!;
+      context.clearRect(0, 0, overlay.width, overlay.height);
+      for (const bike of bikes) drawTag(context, bike, `motorcycle ${bike.score.toFixed(2)}`, "#35b9e8");
+      let noHelmet = 0;
+      for (const person of people) {
+        const mark = helmets
+          .filter((helmet) => pointInside(person, helmet.x + helmet.width / 2, helmet.y + helmet.height / 2, true))
+          .sort((a, b) => b.score - a.score)[0];
+        const label = mark?.label ?? "rider / helmet uncertain";
+        const color = mark?.label === "no helmet" ? "#ef514b" : mark?.label === "helmet" ? "#4dcc85" : "#e1ad36";
+        if (mark?.label === "no helmet") noHelmet += 1;
+        drawTag(context, person, `${label} ${(mark?.score ?? person.score).toFixed(2)}`, color);
+      }
+      let triple = 0;
+      for (const bike of bikes) {
+        const region: VideoBox = {
+          ...bike,
+          x: bike.x - bike.width * 0.35,
+          y: bike.y - bike.height * 1.7,
+          width: bike.width * 1.7,
+          height: bike.height * 2.95,
+        };
+        const riderCount = people.filter((person) => pointInside(region, person.x + person.width / 2, person.y + person.height)).length;
+        if (riderCount >= 3) {
+          triple += 1;
+          drawTag(context, bike, `triple-riding candidate (${riderCount})`, "#ff8a3d");
+        }
+      }
+      setResult({ bikes: bikes.length, riders: people.length, noHelmet, triple, took: Math.round(performance.now() - started) });
+      setModelState(video.paused ? "Frame analysed" : "Detecting while video plays");
+    } catch (error) {
+      setModelState(error instanceof Error ? `Detection error: ${error.message}` : "Could not analyse this frame");
+    } finally {
+      running.current = false;
+      lastRun.current = performance.now();
+    }
+  };
+
+  useEffect(() => {
+    let active = true;
+    loadBrowserModels()
+      .then((models) => {
+        if (!active) return;
+        modelsRef.current = models;
+        setModelState("Models ready — press play or choose a video");
+        void analyse();
+      })
+      .catch((error) => setModelState(error instanceof Error ? `Model load failed: ${error.message}` : "Model load failed"));
+    const tick = (time: number) => {
+      const video = videoRef.current;
+      if (video && !video.paused && time - lastRun.current > 1500) {
+        lastRun.current = time;
+        void analyse();
+      }
+      animation.current = requestAnimationFrame(tick);
+    };
+    animation.current = requestAnimationFrame(tick);
+    return () => {
+      active = false;
+      cancelAnimationFrame(animation.current);
+      if (objectUrl.current) URL.revokeObjectURL(objectUrl.current);
+    };
+  }, []);
+
+  const chooseVideo = (file?: File) => {
+    const video = videoRef.current;
+    if (!file || !video) return;
+    if (objectUrl.current) URL.revokeObjectURL(objectUrl.current);
+    objectUrl.current = URL.createObjectURL(file);
+    video.src = objectUrl.current;
+    video.load();
+    void video.play().catch(() => undefined);
+    setFileName(file.name);
+    setResult({ bikes: 0, riders: 0, noHelmet: 0, triple: 0, took: 0 });
+    setModelState("Video selected — loading first frame");
+  };
+
+  const useSample = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (objectUrl.current) URL.revokeObjectURL(objectUrl.current);
+    objectUrl.current = null;
+    video.src = "/sample-traffic.mp4";
+    video.load();
+    void video.play().catch(() => undefined);
+    setFileName("Built-in road sample");
+    setResult({ bikes: 0, riders: 0, noHelmet: 0, triple: 0, took: 0 });
+  };
+
+  return (
+    <div className="live-detector">
+      <div className="live-video-column">
+        <div className="live-video-stage">
+          <video ref={videoRef} src="/sample-traffic.mp4" controls muted autoPlay loop playsInline preload="metadata" onLoadedData={() => void analyse()} onSeeked={() => void analyse()} />
+          <canvas ref={overlayRef} />
+        </div>
+        <div className="video-picker">
+          <label className="upload-button">
+            Choose your video
+            <input type="file" accept="video/mp4,video/webm,video/ogg,video/*" onChange={(event) => chooseVideo(event.target.files?.[0])} />
+          </label>
+          <button type="button" onClick={useSample}>Use sample</button>
+          <span title={fileName}>{fileName}</span>
+        </div>
+      </div>
+      <aside className="live-readout" aria-live="polite">
+        <span className="label">Live frame result</span>
+        <h3>{modelState}</h3>
+        <dl>
+          <div><dt>{result.bikes}</dt><dd>motorcycles</dd></div>
+          <div><dt>{result.riders}</dt><dd>associated people</dd></div>
+          <div><dt>{result.noHelmet}</dt><dd>no-helmet detections</dd></div>
+          <div><dt>{result.triple}</dt><dd>triple-riding candidates</dd></div>
+        </dl>
+        <p>{result.took ? `Last frame took ${(result.took / 1000).toFixed(1)} seconds on this device.` : "The first model load is large and may take a little time."}</p>
+        <p className="run-caveat">The video is analysed inside your browser and is not uploaded. Results depend on angle, lighting and video quality. Signal jumping still needs a stop line and signal region configured for one fixed camera.</p>
+      </aside>
+    </div>
+  );
+}
+
 function App() {
   const [scenarioId, setScenarioId] = useState<ScenarioId>("combined");
   const [progress, setProgress] = useState(0);
@@ -178,42 +461,24 @@ function App() {
           <h1>Motorcycle safety events, explained frame by frame.</h1>
           <p className="hero-copy">
             A working computer-vision prototype for helmet use, triple riding and red-light crossing.
-            The page now includes a real traffic-video run as well as a small rule sandbox.
+            Choose a normal video file and the models analyse its frames directly in your browser.
           </p>
           <div className="hero-actions">
             <a className="primary-link" href="#real-demo">Watch the real run</a>
             <a className="secondary-link" href="#system">See the pipeline</a>
           </div>
           <div className="truth-note">
-            <strong>Current status:</strong> real footage processed with two models, rule engine tested, and browser demo working. Raspberry Pi benchmarking still needs the actual hardware.
+            <strong>Current status:</strong> uploadable video inference and the rule engine are working. Raspberry Pi benchmarking still needs the actual hardware.
           </div>
         </section>
 
         <section className="real-demo-section" id="real-demo">
           <div className="section-heading">
-            <div><span className="section-number">01</span><h2>Real traffic run</h2></div>
-            <span className="real-badge"><i /> PROCESSED FOOTAGE</span>
+            <div><span className="section-number">01</span><h2>Try a real video</h2></div>
+            <span className="real-badge"><i /> BROWSER INFERENCE</span>
           </div>
-          <div className="real-demo-grid">
-            <div className="video-wrap">
-              <video controls muted loop playsInline preload="metadata" poster="/real-traffic-poster.jpg">
-                <source src="/real-traffic-demo.mp4" type="video/mp4" />
-                Your browser could not play this video.
-              </video>
-            </div>
-            <aside className="run-notes">
-              <span className="label">What actually ran</span>
-              <h3>12.5 seconds, two models, full clip</h3>
-              <p>A YOLO11 model tracks motorcycles and people. A separate helmet model marks each associated rider as helmet, no helmet, or uncertain.</p>
-              <dl>
-                <div><dt>4</dt><dd>no-helmet candidates</dd></div>
-                <div><dt>2</dt><dd>triple-riding candidates</dd></div>
-                <div><dt>0</dt><dd>signal events evaluated</dd></div>
-              </dl>
-              <p className="run-caveat">These are candidate events, not ground truth. The crowded right edge produces uncertain rider-to-bike associations, so a person still needs to review them. Signal jumping is not evaluated because this clip has no usable traffic signal and stop line.</p>
-            </aside>
-          </div>
-          <p className="video-credit">Footage: “Busy Indian Street with Traffic and Motorbikes” by Aamir Somewhere, used under the Pexels license.</p>
+          <LiveVideoDetector />
+          <p className="video-credit">The built-in sample is “Busy Indian Street with Traffic and Motorbikes” by Aamir Somewhere, used under the Pexels license. You can replace it with your own video above.</p>
         </section>
 
         <section className="demo-section" id="logic-demo">
@@ -349,7 +614,7 @@ function App() {
           <div className="implementation-note">
             <div>
               <span className="label">Web demo</span>
-              <p>Shows the processed real clip and keeps a deterministic sandbox for reviewing each rule.</p>
+              <p>Runs both models on a selected video and keeps a deterministic sandbox for reviewing each rule.</p>
             </div>
             <div>
               <span className="label">Python prototype</span>

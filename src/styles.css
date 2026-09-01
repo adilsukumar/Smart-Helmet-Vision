@@ -55,18 +55,25 @@ h1 { max-width: 910px; margin: 0; font-family: Georgia, "Times New Roman", serif
 .real-demo-section { background: #e5e1d7; }
 .real-badge { display: inline-flex; align-items: center; gap: 8px; color: #4b5a61; font: 750 11px/1 monospace; letter-spacing: .08em; }
 .real-badge i { width: 8px; height: 8px; border-radius: 50%; background: #d85547; box-shadow: 0 0 0 5px rgba(216,85,71,.1); }
-.real-demo-grid { max-width: 1320px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(290px, .7fr); border: 1px solid #b9b4a8; background: #172128; }
-.video-wrap { min-width: 0; display: grid; place-items: center; background: #0d1418; border-right: 1px solid #3b474d; }
-.video-wrap video { display: block; width: 100%; aspect-ratio: 16 / 9; background: #0d1418; object-fit: contain; }
-.run-notes { padding: 30px; color: #e9ecec; }
-.run-notes .label { color: #edb447; }
-.run-notes h3 { margin: 12px 0 18px; font: 500 27px/1.15 Georgia, serif; }
-.run-notes > p { color: #aeb8bc; font-size: 14px; line-height: 1.55; }
-.run-notes dl { margin: 24px 0; border-top: 1px solid #3b474d; }
-.run-notes dl div { display: grid; grid-template-columns: 54px 1fr; align-items: center; padding: 13px 0; border-bottom: 1px solid #3b474d; }
-.run-notes dt { color: #edb447; font: 600 26px/1 Georgia, serif; }
-.run-notes dd { margin: 0; color: #d7dddf; font-size: 13px; }
-.run-notes .run-caveat { color: #e0b0a9; font-size: 12px; }
+.live-detector { max-width: 1320px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(290px, .7fr); border: 1px solid #b9b4a8; background: #172128; }
+.live-video-column { min-width: 0; border-right: 1px solid #3b474d; background: #0d1418; }
+.live-video-stage { position: relative; min-height: 280px; display: grid; place-items: center; overflow: hidden; background: #0d1418; }
+.live-video-stage video { display: block; width: 100%; height: auto; background: #0d1418; }
+.live-video-stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.video-picker { min-height: 58px; padding: 9px 12px; display: flex; align-items: center; gap: 9px; border-top: 1px solid #3b474d; }
+.video-picker button, .upload-button { min-height: 38px; padding: 0 14px; display: inline-flex; align-items: center; border: 1px solid #627078; color: #edf0f1; background: #26343a; cursor: pointer; font-size: 13px; font-weight: 750; }
+.upload-button { color: #172128; background: #f0c548; border-color: #f0c548; }
+.upload-button input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.video-picker > span { min-width: 0; margin-left: auto; color: #8e9ca3; font: 11px/1.3 monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.live-readout { padding: 30px; color: #e9ecec; }
+.live-readout .label { color: #edb447; }
+.live-readout h3 { min-height: 62px; margin: 12px 0 18px; font: 500 25px/1.2 Georgia, serif; }
+.live-readout > p { color: #aeb8bc; font-size: 13px; line-height: 1.55; }
+.live-readout dl { margin: 22px 0; border-top: 1px solid #3b474d; }
+.live-readout dl div { display: grid; grid-template-columns: 54px 1fr; align-items: center; padding: 11px 0; border-bottom: 1px solid #3b474d; }
+.live-readout dt { color: #edb447; font: 600 24px/1 Georgia, serif; }
+.live-readout dd { margin: 0; color: #d7dddf; font-size: 13px; }
+.live-readout .run-caveat { color: #e0b0a9; font-size: 12px; }
 .video-credit { max-width: 1320px; margin: 13px auto 0; color: #69737a; font-size: 12px; }
 .demo-section {
   background-color: #172128; color: #f2f1ec;
@@ -154,8 +161,8 @@ footer { padding: 30px clamp(24px, 5vw, 76px); background: #10181c; color: #8390
   .scenario-bar p { grid-column: 1 / -1; }
   .control-row { justify-content: flex-end; }
   .demo-grid { grid-template-columns: 1fr; }
-  .real-demo-grid { grid-template-columns: 1fr; }
-  .video-wrap { border-right: 0; border-bottom: 1px solid #3b474d; }
+  .live-detector { grid-template-columns: 1fr; }
+  .live-video-column { border-right: 0; border-bottom: 1px solid #3b474d; }
   .camera-panel { border-right: 0; border-bottom: 1px solid #3b474d; }
   .pipeline { grid-template-columns: 1fr 1fr; }
   .pipeline article { border-bottom: 1px solid #d0cdc5; }
