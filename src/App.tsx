@@ -165,7 +165,8 @@ function App() {
           <span>Smart Helmet Vision</span>
         </a>
         <nav aria-label="Main navigation">
-          <a href="#demo">Demo</a>
+          <a href="#real-demo">Real video</a>
+          <a href="#logic-demo">Rule demo</a>
           <a href="#system">How it works</a>
           <a href="#research">Research</a>
         </nav>
@@ -176,23 +177,50 @@ function App() {
           <div className="eyebrow">Raspberry Pi + camera + computer vision</div>
           <h1>Motorcycle safety events, explained frame by frame.</h1>
           <p className="hero-copy">
-            A working rule-engine prototype for helmet use, triple riding and red-light crossing.
-            This web page demonstrates the logic; the Python project connects the same logic to a tracked camera feed.
+            A working computer-vision prototype for helmet use, triple riding and red-light crossing.
+            The page now includes a real traffic-video run as well as a small rule sandbox.
           </p>
           <div className="hero-actions">
-            <a className="primary-link" href="#demo">Run the demo</a>
+            <a className="primary-link" href="#real-demo">Watch the real run</a>
             <a className="secondary-link" href="#system">See the pipeline</a>
           </div>
           <div className="truth-note">
-            <strong>Current status:</strong> rule engine tested, browser simulation working, model training and Raspberry Pi benchmarking still require the approved dataset and hardware.
+            <strong>Current status:</strong> real footage processed with two models, rule engine tested, and browser demo working. Raspberry Pi benchmarking still needs the actual hardware.
           </div>
         </section>
 
-        <section className="demo-section" id="demo">
+        <section className="real-demo-section" id="real-demo">
+          <div className="section-heading">
+            <div><span className="section-number">01</span><h2>Real traffic run</h2></div>
+            <span className="real-badge"><i /> PROCESSED FOOTAGE</span>
+          </div>
+          <div className="real-demo-grid">
+            <div className="video-wrap">
+              <video controls muted loop playsInline preload="metadata" poster="/real-traffic-poster.jpg">
+                <source src="/real-traffic-demo.mp4" type="video/mp4" />
+                Your browser could not play this video.
+              </video>
+            </div>
+            <aside className="run-notes">
+              <span className="label">What actually ran</span>
+              <h3>12.5 seconds, two models, full clip</h3>
+              <p>A YOLO11 model tracks motorcycles and people. A separate helmet model marks each associated rider as helmet, no helmet, or uncertain.</p>
+              <dl>
+                <div><dt>4</dt><dd>no-helmet candidates</dd></div>
+                <div><dt>2</dt><dd>triple-riding candidates</dd></div>
+                <div><dt>0</dt><dd>signal events evaluated</dd></div>
+              </dl>
+              <p className="run-caveat">These are candidate events, not ground truth. The crowded right edge produces uncertain rider-to-bike associations, so a person still needs to review them. Signal jumping is not evaluated because this clip has no usable traffic signal and stop line.</p>
+            </aside>
+          </div>
+          <p className="video-credit">Footage: “Busy Indian Street with Traffic and Motorbikes” by Aamir Somewhere, used under the Pexels license.</p>
+        </section>
+
+        <section className="demo-section" id="logic-demo">
           <div className="section-heading">
             <div>
-              <span className="section-number">01</span>
-              <h2>Interactive prototype</h2>
+              <span className="section-number">02</span>
+              <h2>Rule logic sandbox</h2>
             </div>
             <span className={`run-status ${running ? "live" : ""}`}><i />{status}</span>
           </div>
@@ -305,7 +333,7 @@ function App() {
 
         <section className="system-section" id="system">
           <div className="section-heading">
-            <div><span className="section-number">02</span><h2>How the complete system works</h2></div>
+            <div><span className="section-number">03</span><h2>How the complete system works</h2></div>
           </div>
           <div className="pipeline">
             {[
@@ -321,7 +349,7 @@ function App() {
           <div className="implementation-note">
             <div>
               <span className="label">Web demo</span>
-              <p>Runs a deterministic scene in the browser so the rule decisions are easy to review.</p>
+              <p>Shows the processed real clip and keeps a deterministic sandbox for reviewing each rule.</p>
             </div>
             <div>
               <span className="label">Python prototype</span>
@@ -336,13 +364,15 @@ function App() {
 
         <section className="research-section" id="research">
           <div className="section-heading">
-            <div><span className="section-number">03</span><h2>Research used</h2></div>
+            <div><span className="section-number">04</span><h2>Research used</h2></div>
           </div>
           <p className="research-intro">I used official or primary sources for the dataset, Raspberry Pi deployment path and Indian traffic-rule context.</p>
           <div className="source-list">
             <a href="https://www.aicitychallenge.org/2024-data-and-evaluation/" target="_blank" rel="noreferrer"><span>Dataset</span><strong>AI City Challenge 2024 · Helmet-rule Track 5</strong><i>↗</i></a>
             <a href="https://www.raspberrypi.com/documentation/accessories/ai-camera.html" target="_blank" rel="noreferrer"><span>Hardware</span><strong>Raspberry Pi AI Camera documentation</strong><i>↗</i></a>
             <a href="https://docs.ultralytics.com/guides/raspberry-pi" target="_blank" rel="noreferrer"><span>Deployment</span><strong>Ultralytics Raspberry Pi and NCNN guide</strong><i>↗</i></a>
+            <a href="https://huggingface.co/nnsohamnn/helmet-detection-yolo11" target="_blank" rel="noreferrer"><span>Demo model</span><strong>Helmet Detection YOLO11 · MIT licensed weights</strong><i>↗</i></a>
+            <a href="https://www.pexels.com/video/busy-indian-street-with-traffic-and-motorbikes-34394424/" target="_blank" rel="noreferrer"><span>Demo video</span><strong>Pexels traffic footage · Aamir Somewhere</strong><i>↗</i></a>
             <a href="https://www.indiacode.nic.in/handle/123456789/13700?locale=en" target="_blank" rel="noreferrer"><span>Rules</span><strong>Motor Vehicles Act · Sections 128 and 129</strong><i>↗</i></a>
           </div>
         </section>

@@ -111,7 +111,31 @@ def is_rider(detection: Detection) -> bool:
 
 
 def is_no_helmet(detection: Detection) -> bool:
-    return "nohelmet" in detection.canonical_label
+    return detection.canonical_label in {"nohelmet", "withouthelmet", "ridernohelmet"} or "nohelmet" in detection.canonical_label
+
+
+def attach_helmet_state(people, helmet_marks):
+    riders = []
+    for person in people:
+        best = None
+        best_score = 0.0
+        upper_body = BoundingBox(
+            person.box.x1 - person.box.width * 0.12,
+            person.box.y1 - person.box.height * 0.08,
+            person.box.x2 + person.box.width * 0.12,
+            person.box.y1 + person.box.height * 0.68,
+        )
+        for mark in helmet_marks:
+            if upper_body.contains(mark.box.center) and mark.confidence > best_score:
+                best = mark
+                best_score = mark.confidence
+        label = "rider"
+        confidence = person.confidence
+        if best is not None:
+            label = "rider_no_helmet" if is_no_helmet(best) else "rider_helmet"
+            confidence = min(person.confidence, best.confidence)
+        riders.append(Detection(label, confidence, person.box, person.track_id))
+    return riders
 
 
 def associate_riders_to_bikes(bikes, riders, minimum_score: float = 0.08):
@@ -263,6 +287,31 @@ class UltralyticsTracker:
         ]
 
 
+class UltralyticsDetector:
+    def __init__(self, model_path: str, confidence: float = 0.2, device: str | None = None) -> None:
+        try:
+            from ultralytics import YOLO
+        except ImportError as exc:
+            raise RuntimeError("Install backend/ml-requirements.txt to run video inference") from exc
+        self.model = YOLO(model_path)
+        self.confidence = confidence
+        self.device = device
+
+    def detect(self, frame: Any) -> list[Detection]:
+        result = self.model.predict(frame, conf=self.confidence, device=self.device,
+                                    imgsz=640, verbose=False)[0]
+        boxes = result.boxes
+        if boxes is None or boxes.xyxy is None:
+            return []
+        return [
+            Detection(str(result.names[int(class_id)]), float(score),
+                      BoundingBox(*map(float, coordinates)))
+            for coordinates, class_id, score in zip(
+                boxes.xyxy.cpu().tolist(), boxes.cls.cpu().tolist(), boxes.conf.cpu().tolist()
+            )
+        ]
+
+
 class EvidenceStore:
     def __init__(self, output_dir: str | Path) -> None:
         self.output_dir = Path(output_dir)
@@ -308,18 +357,31 @@ def run_demo() -> int:
     return 0
 
 
-def draw(frame, detections, events, signal, line) -> None:
+def draw(frame, detections, events, signal, line=None) -> None:
     import cv2
-    cv2.line(frame, tuple(map(int, line[0])), tuple(map(int, line[1])), (255, 180, 0), 2)
+    if line is not None:
+        cv2.line(frame, tuple(map(int, line[0])), tuple(map(int, line[1])), (255, 180, 0), 2)
     for detection in detections:
         box = detection.box
-        color = (0, 0, 255) if is_no_helmet(detection) else (0, 180, 0)
+        if is_no_helmet(detection):
+            color = (50, 50, 235)
+        elif "helmet" in detection.canonical_label:
+            color = (70, 205, 110)
+        else:
+            color = (235, 190, 65)
         cv2.rectangle(frame, (int(box.x1), int(box.y1)), (int(box.x2), int(box.y2)), color, 2)
-        cv2.putText(frame, f"{detection.label} {detection.confidence:.2f} id={detection.track_id}",
+        track = f" #{detection.track_id}" if detection.track_id is not None else ""
+        cv2.putText(frame, f"{detection.label}{track} {detection.confidence:.2f}",
                     (int(box.x1), max(18, int(box.y1) - 4)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
-    cv2.putText(frame, f"Signal: {signal}", (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (230, 230, 230), 2)
+    overlay = frame.copy()
+    cv2.rectangle(overlay, (12, 12), (650, 92), (12, 22, 28), -1)
+    cv2.addWeighted(overlay, 0.78, frame, 0.22, 0, frame)
+    cv2.putText(frame, "REAL TRAFFIC FOOTAGE / TWO-MODEL PROTOTYPE", (26, 40),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.64, (245, 245, 245), 2)
+    signal_text = f"Signal state: {signal}" if signal != "unknown" else "Signal jumping: not evaluated in this clip"
+    cv2.putText(frame, signal_text, (26, 70), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (180, 205, 215), 1)
     for index, event in enumerate(events):
-        cv2.putText(frame, f"VIOLATION: {event.rule}", (20, 60 + index * 28),
+        cv2.putText(frame, f"CANDIDATE EVENT: {event.rule}", (20, 118 + index * 28),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
 
@@ -331,39 +393,75 @@ def run_video(args) -> int:
     capture = cv2.VideoCapture(source)
     if not capture.isOpened():
         raise SystemExit(f"Could not open source: {args.source}")
-    width = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    source_fps = capture.get(cv2.CAP_PROP_FPS) or 30.0
+    source_width = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH))
+    source_height = int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    width = min(args.width, source_width)
+    height = round(width * source_height / source_width)
+    if height % 2:
+        height += 1
     scale = lambda p: (p[0] * width, p[1] * height)
     line_start, line_end = scale(config["stop_line"][0]), scale(config["stop_line"][1])
     rules = RuleConfig(config["history_window"], config["confirmation_hits"],
                        config["triple_rider_count"], line_start, line_end, config["violation_side"])
     detector = UltralyticsTracker(args.model, args.confidence, args.device)
+    helmet_detector = UltralyticsDetector(args.helmet_model, args.helmet_confidence, args.device) if args.helmet_model else None
     engine = ViolationEngine(rules)
     signal_reader = SignalStateEstimator(config["signal_roi"])
     evidence = EvidenceStore(args.output)
     frame_index = 0
+    read_index = 0
+    stride = max(1, round(source_fps / args.fps))
+    writer = None
+    if args.save_video:
+        output_path = Path(args.save_video)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        writer = cv2.VideoWriter(str(output_path), cv2.VideoWriter_fourcc(*"mp4v"),
+                                 source_fps / stride, (width, height))
+        if not writer.isOpened():
+            raise SystemExit(f"Could not create video: {output_path}")
 
     while True:
         ok, frame = capture.read()
         if not ok:
             break
+        if read_index % stride:
+            read_index += 1
+            continue
+        read_index += 1
+        if frame.shape[1] != width:
+            frame = cv2.resize(frame, (width, height), interpolation=cv2.INTER_AREA)
         detections = detector.track(frame)
         bikes = [item for item in detections if is_bike(item)]
-        riders = [item for item in detections if is_rider(item) and not is_bike(item)]
+        people = [item for item in detections if item.canonical_label == "person"]
+        helmet_marks = helmet_detector.detect(frame) if helmet_detector else []
+        riders = attach_helmet_state(people, helmet_marks) if helmet_detector else people
         groups = associate_riders_to_bikes(bikes, riders)
         signal = args.signal if args.signal != "auto" else signal_reader.estimate(frame)
         events = []
         for bike in bikes:
             events.extend(engine.observe(frame_index, bike, groups.get(bike.track_id, []), signal))
-        draw(frame, detections, events, signal, (line_start, line_end))
+        grouped_riders = {
+            rider.track_id: rider
+            for bike_riders in groups.values()
+            for rider in bike_riders
+            if rider.track_id is not None
+        }
+        visible = [*bikes, *grouped_riders.values()]
+        line = (line_start, line_end) if signal != "unknown" else None
+        draw(frame, visible, events, signal, line)
         for event in events:
             print(json.dumps(evidence.write(event, frame)))
         if args.display:
             cv2.imshow("Smart Helmet Vision - press q to quit", frame)
             if cv2.waitKey(1) & 0xFF == ord("q"):
                 break
+        if writer is not None:
+            writer.write(frame)
         frame_index += 1
     capture.release()
+    if writer is not None:
+        writer.release()
     cv2.destroyAllWindows()
     return 0
 
@@ -374,10 +472,15 @@ def main() -> int:
     parser.add_argument("--source", default="0")
     parser.add_argument("--model")
     parser.add_argument("--config", default=str(Path(__file__).with_name("traffic_demo.json")))
-    parser.add_argument("--signal", choices=["auto", "red", "amber", "green"], default="auto")
+    parser.add_argument("--helmet-model")
+    parser.add_argument("--signal", choices=["auto", "red", "amber", "green", "unknown"], default="auto")
     parser.add_argument("--output", default="runs/traffic_events")
     parser.add_argument("--confidence", type=float, default=0.25)
+    parser.add_argument("--helmet-confidence", type=float, default=0.15)
     parser.add_argument("--device", default=None)
+    parser.add_argument("--save-video")
+    parser.add_argument("--fps", type=float, default=10.0)
+    parser.add_argument("--width", type=int, default=1280)
     parser.add_argument("--display", action="store_true")
     args = parser.parse_args()
     if args.demo:
@@ -389,4 +492,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

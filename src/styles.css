@@ -51,7 +51,23 @@ h1 { max-width: 910px; margin: 0; font-family: Georgia, "Times New Roman", serif
 .secondary-link { border: 1px solid #b9b7b0; background: #faf9f5; }
 .truth-note { max-width: 840px; margin-top: 42px; padding: 18px 0 18px 20px; border-left: 3px solid #d0a62e; color: #47545b; line-height: 1.55; }
 
-.demo-section, .system-section, .research-section { padding: 72px clamp(24px, 5vw, 76px); }
+.real-demo-section, .demo-section, .system-section, .research-section { padding: 72px clamp(24px, 5vw, 76px); }
+.real-demo-section { background: #e5e1d7; }
+.real-badge { display: inline-flex; align-items: center; gap: 8px; color: #4b5a61; font: 750 11px/1 monospace; letter-spacing: .08em; }
+.real-badge i { width: 8px; height: 8px; border-radius: 50%; background: #d85547; box-shadow: 0 0 0 5px rgba(216,85,71,.1); }
+.real-demo-grid { max-width: 1320px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(290px, .7fr); border: 1px solid #b9b4a8; background: #172128; }
+.video-wrap { min-width: 0; display: grid; place-items: center; background: #0d1418; border-right: 1px solid #3b474d; }
+.video-wrap video { display: block; width: 100%; aspect-ratio: 16 / 9; background: #0d1418; object-fit: contain; }
+.run-notes { padding: 30px; color: #e9ecec; }
+.run-notes .label { color: #edb447; }
+.run-notes h3 { margin: 12px 0 18px; font: 500 27px/1.15 Georgia, serif; }
+.run-notes > p { color: #aeb8bc; font-size: 14px; line-height: 1.55; }
+.run-notes dl { margin: 24px 0; border-top: 1px solid #3b474d; }
+.run-notes dl div { display: grid; grid-template-columns: 54px 1fr; align-items: center; padding: 13px 0; border-bottom: 1px solid #3b474d; }
+.run-notes dt { color: #edb447; font: 600 26px/1 Georgia, serif; }
+.run-notes dd { margin: 0; color: #d7dddf; font-size: 13px; }
+.run-notes .run-caveat { color: #e0b0a9; font-size: 12px; }
+.video-credit { max-width: 1320px; margin: 13px auto 0; color: #69737a; font-size: 12px; }
 .demo-section {
   background-color: #172128; color: #f2f1ec;
   background-image: linear-gradient(rgba(114, 145, 158, .07) 1px, transparent 1px), linear-gradient(90deg, rgba(114, 145, 158, .07) 1px, transparent 1px);
@@ -138,6 +154,8 @@ footer { padding: 30px clamp(24px, 5vw, 76px); background: #10181c; color: #8390
   .scenario-bar p { grid-column: 1 / -1; }
   .control-row { justify-content: flex-end; }
   .demo-grid { grid-template-columns: 1fr; }
+  .real-demo-grid { grid-template-columns: 1fr; }
+  .video-wrap { border-right: 0; border-bottom: 1px solid #3b474d; }
   .camera-panel { border-right: 0; border-bottom: 1px solid #3b474d; }
   .pipeline { grid-template-columns: 1fr 1fr; }
   .pipeline article { border-bottom: 1px solid #d0cdc5; }

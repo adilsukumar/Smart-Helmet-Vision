@@ -1,34 +1,23 @@
-# Smart Helmet Vision — Internship Prototype
+# Smart Helmet Vision — one-page summary
 
-I built a working prototype for detecting three motorcycle traffic-rule cases: no helmet, triple riding and crossing the stop line during a red signal. The aim is to turn a camera feed into a small set of reviewable events instead of treating every detection in every frame as a separate violation.
+I made this as a practical starting point for the internship topic: helmet detection, triple riding and signal jumping using a Raspberry Pi, camera and machine learning. It is not only a proposal now. The repository has a real traffic-video run, a browser demo, working Python code and tests.
 
-## What I completed
+For the real demo I used the full 12.5-second Pexels clip “Busy Indian Street with Traffic and Motorbikes”. A normal YOLO11 model tracks motorcycles and people, while a separate YOLO11 helmet model checks for “With Helmet” and “Without Helmet”. The code then associates nearby riders with a motorcycle track and waits for the same condition across several frames before creating a candidate event. The processed video is on the website, so the result can be reviewed without installing Python.
 
-The submission has an interactive web demo and a Python camera pipeline. The web demo can be hosted on Vercel and lets a reviewer run five controlled cases: combined violation, no helmet, triple riding, red-light crossing and a compliant ride. The Python side contains the detection adapter, motorcycle/rider association, stop-line geometry, temporal confirmation, duplicate suppression, evidence output, dataset conversion and training entry points. I also wrote six automated tests; all six pass.
+This run produced four no-helmet candidates and two triple-riding candidates. I am deliberately calling them candidates because the scene becomes crowded near the right edge and rider-to-bike association is not perfect. Signal jumping was not evaluated in this clip: there is no suitable traffic signal and calibrated stop line in view. The interactive browser sandbox still demonstrates that rule, and the Python code supports a configurable signal region and stop line for the correct junction footage.
 
-## How it works right now
+What is working now: full video input, motorcycle/person tracking, separate helmet inference, rider-to-bike association, multi-frame confirmation, duplicate-event control, evidence images, annotated-video export, five browser rule scenarios and six automated Python tests. The Vercel build also keeps the heavy ML packages out of the web deployment.
 
-1. A custom object detector identifies the motorcycle and the riders' helmet states.
-2. Tracking keeps the same motorcycle ID across consecutive frames.
-3. Spatial association connects nearby riders to that motorcycle.
-4. The rule engine checks several frames before confirming no-helmet or triple-riding cases. For signal jumping, it checks whether a tracked motorcycle crosses the configured stop line while the signal is red.
-5. A confirmed case is recorded once with its frame, rule, track ID and confidence for human review.
+The next hardware step is to connect a fixed Raspberry Pi camera, collect footage from its actual angle, label/train with the chosen dataset, export a smaller model to NCNN and measure FPS, latency and temperature on the Pi. The stop line and signal region would be calibrated once for that camera. Results should remain review suggestions, not automatic fines or identity recognition.
 
-The Vercel page is a transparent browser simulation of this logic. The Python code is the part intended for real video or Raspberry Pi use. I have not claimed final real-road accuracy because that needs the approved dataset, trained weights and testing on the actual camera position.
+Research and assets I used:
 
-## What I can do next
+- AI City Challenge 2024 Track 5: https://www.aicitychallenge.org/2024-data-and-evaluation/
+- Raspberry Pi AI Camera: https://www.raspberrypi.com/documentation/accessories/ai-camera.html
+- Ultralytics tracking: https://docs.ultralytics.com/modes/track/
+- Ultralytics Raspberry Pi / NCNN guide: https://docs.ultralytics.com/guides/raspberry-pi/
+- MIT-licensed helmet model used for this demo: https://huggingface.co/nnsohamnn/helmet-detection-yolo11
+- Pexels source video by Aamir Somewhere: https://www.pexels.com/video/busy-indian-street-with-traffic-and-motorbikes-34394424/
+- Motor Vehicles Act, 1988: https://www.indiacode.nic.in/handle/123456789/13700?locale=en
 
-Given access to the dataset and Raspberry Pi hardware, I can train a small model, validate it separately for day/night and crowded scenes, export it to a Pi-friendly format such as NCNN, measure FPS/latency, tune the stop-line region for the target junction and add a simple review dashboard. The system should create candidate events for a person to verify; it should not issue automatic challans or perform identity recognition.
-
-## Current result
-
-Browser demo: production build passed; combined test produced all 3 expected events with no browser errors. Python prototype: 6/6 automated tests passed and the deterministic simulation emitted one NO_HELMET, one TRIPLE_RIDING and one RED_LIGHT_CROSSING event.
-
-## Research used
-
-- AI City Challenge 2024, Track 5 dataset/evaluation: https://www.aicitychallenge.org/2024-data-and-evaluation/
-- Raspberry Pi AI Camera documentation: https://www.raspberrypi.com/documentation/accessories/ai-camera.html
-- Ultralytics Raspberry Pi/NCNN deployment guide: https://docs.ultralytics.com/guides/raspberry-pi
-- Motor Vehicles Act, 1988 (Sections 128 and 129): https://www.indiacode.nic.in/handle/123456789/13700?locale=en
-
-Source code and deployment instructions are included in the project README.
+Code: https://github.com/adilsukumar/Smart-Helmet-Vision
