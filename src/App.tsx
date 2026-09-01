@@ -110,12 +110,16 @@ type FrameResult = {
   took: number;
 };
 
-const inputSize = 416;
+type FrameCrop = { x: number; y: number; width: number; height: number };
+type HelmetMemory = { x: number; y: number; label: string; streak: number };
+
+const inputSize = 320;
 let browserModels: Promise<{ traffic: ort.InferenceSession; helmet: ort.InferenceSession }> | null = null;
 
 function loadBrowserModels(onProgress?: (message: string) => void) {
   if (!browserModels) {
-    ort.env.wasm.numThreads = 1;
+    const hardwareThreads = navigator.hardwareConcurrency || 2;
+    ort.env.wasm.numThreads = window.crossOriginIsolated ? Math.min(4, Math.max(2, hardwareThreads - 1)) : 1;
     ort.env.wasm.proxy = false;
     browserModels = (async () => {
       onProgress?.("Loading traffic model — 1 of 2");
@@ -153,6 +157,8 @@ function readOutput(
   videoWidth: number,
   videoHeight: number,
   minimum: number,
+  offsetX = 0,
+  offsetY = 0,
 ) {
   const channels = tensor.dims[1];
   const anchors = tensor.dims[2];
@@ -173,27 +179,31 @@ function readOutput(
     const centerY = values[anchors + index];
     const width = values[anchors * 2 + index];
     const height = values[anchors * 3 + index];
-    const x1 = Math.max(0, (centerX - width / 2 - padX) / scale);
-    const y1 = Math.max(0, (centerY - height / 2 - padY) / scale);
-    const x2 = Math.min(videoWidth, (centerX + width / 2 - padX) / scale);
-    const y2 = Math.min(videoHeight, (centerY + height / 2 - padY) / scale);
+    const x1 = offsetX + Math.max(0, (centerX - width / 2 - padX) / scale);
+    const y1 = offsetY + Math.max(0, (centerY - height / 2 - padY) / scale);
+    const x2 = offsetX + Math.min(videoWidth, (centerX + width / 2 - padX) / scale);
+    const y2 = offsetY + Math.min(videoHeight, (centerY + height / 2 - padY) / scale);
     if (x2 > x1 && y2 > y1) boxes.push({ x: x1, y: y1, width: x2 - x1, height: y2 - y1, score, classId: selected.id, label: selected.label });
   }
   return nms(boxes);
 }
 
-function prepareFrame(video: HTMLVideoElement, scratch: HTMLCanvasElement) {
+function prepareFrame(video: HTMLVideoElement, scratch: HTMLCanvasElement, crop?: FrameCrop) {
   scratch.width = inputSize;
   scratch.height = inputSize;
   const context = scratch.getContext("2d", { willReadFrequently: true })!;
-  const scale = Math.min(inputSize / video.videoWidth, inputSize / video.videoHeight);
-  const width = video.videoWidth * scale;
-  const height = video.videoHeight * scale;
+  const sourceX = crop?.x ?? 0;
+  const sourceY = crop?.y ?? 0;
+  const sourceWidth = crop?.width ?? video.videoWidth;
+  const sourceHeight = crop?.height ?? video.videoHeight;
+  const scale = Math.min(inputSize / sourceWidth, inputSize / sourceHeight);
+  const width = sourceWidth * scale;
+  const height = sourceHeight * scale;
   const padX = (inputSize - width) / 2;
   const padY = (inputSize - height) / 2;
   context.fillStyle = "rgb(114, 114, 114)";
   context.fillRect(0, 0, inputSize, inputSize);
-  context.drawImage(video, padX, padY, width, height);
+  context.drawImage(video, sourceX, sourceY, sourceWidth, sourceHeight, padX, padY, width, height);
   const pixels = context.getImageData(0, 0, inputSize, inputSize).data;
   const input = new Float32Array(3 * inputSize * inputSize);
   const plane = inputSize * inputSize;
@@ -202,12 +212,39 @@ function prepareFrame(video: HTMLVideoElement, scratch: HTMLCanvasElement) {
     input[plane + i] = pixels[i * 4 + 1] / 255;
     input[plane * 2 + i] = pixels[i * 4 + 2] / 255;
   }
-  return { tensor: new ort.Tensor("float32", input, [1, 3, inputSize, inputSize]), scale, padX, padY };
+  return { tensor: new ort.Tensor("float32", input, [1, 3, inputSize, inputSize]), scale, padX, padY, sourceX, sourceY, sourceWidth, sourceHeight };
 }
 
 function pointInside(box: VideoBox, x: number, y: number, upperOnly = false) {
-  const bottom = upperOnly ? box.y + box.height * 0.68 : box.y + box.height;
+  const bottom = upperOnly ? box.y + box.height * 0.5 : box.y + box.height;
   return x >= box.x && x <= box.x + box.width && y >= box.y && y <= bottom;
+}
+
+function riderRegion(bike: VideoBox): VideoBox {
+  return {
+    ...bike,
+    x: bike.x - bike.width * 0.45,
+    y: bike.y - bike.height * 1.8,
+    width: bike.width * 1.9,
+    height: bike.height * 3.1,
+  };
+}
+
+function cropAround(boxes: VideoBox[], frameWidth: number, frameHeight: number): FrameCrop {
+  const left = Math.min(...boxes.map((box) => box.x));
+  const top = Math.min(...boxes.map((box) => box.y));
+  const right = Math.max(...boxes.map((box) => box.x + box.width));
+  const bottom = Math.max(...boxes.map((box) => box.y + box.height));
+  const width = right - left;
+  const height = bottom - top;
+  const x = Math.max(0, left - width * 0.3);
+  const y = Math.max(0, top - height * 0.28);
+  return {
+    x,
+    y,
+    width: Math.min(frameWidth - x, width * 1.6),
+    height: Math.min(frameHeight - y, height * 1.48),
+  };
 }
 
 function drawTag(context: CanvasRenderingContext2D, box: VideoBox, text: string, color: string) {
@@ -232,6 +269,7 @@ function LiveVideoDetector() {
   const running = useRef(false);
   const lastRun = useRef(0);
   const animation = useRef(0);
+  const helmetHistory = useRef<HelmetMemory[]>([]);
   const [modelState, setModelState] = useState("Please wait — the models are still loading");
   const [modelsReady, setModelsReady] = useState(false);
   const [fileName, setFileName] = useState("Built-in road sample");
@@ -246,47 +284,87 @@ function LiveVideoDetector() {
     const started = performance.now();
     try {
       const frame = prepareFrame(video, scratchRef.current);
-      const input = { images: frame.tensor };
-      const [trafficOutput, helmetOutput] = await Promise.all([models.traffic.run(input), models.helmet.run(input)]);
-      const common = [frame.scale, frame.padX, frame.padY, video.videoWidth, video.videoHeight] as const;
+      const trafficOutput = await models.traffic.run({ images: frame.tensor });
+      const common = [frame.scale, frame.padX, frame.padY, frame.sourceWidth, frame.sourceHeight] as const;
       const trafficTensor = trafficOutput[models.traffic.outputNames[0]];
-      const helmetTensor = helmetOutput[models.helmet.outputNames[0]];
       const traffic = readOutput(trafficTensor, [{ id: 0, label: "person" }, { id: 3, label: "motorcycle" }], ...common, 0.28);
-      const helmets = readOutput(helmetTensor, [{ id: 0, label: "helmet" }, { id: 1, label: "no helmet" }], ...common, 0.22);
       const people = traffic.filter((box) => box.label === "person");
       const bikes = traffic.filter((box) => box.label === "motorcycle");
+      const closeBikes = bikes
+        .filter((bike) => bike.score >= 0.32 && bike.width >= video.videoWidth * 0.075 && bike.height >= video.videoHeight * 0.16)
+        .sort((a, b) => b.width * b.height - a.width * a.height);
+      const targetBike = closeBikes[0];
+      const targetRegion = targetBike ? riderRegion(targetBike) : null;
+      const checkedPeople = targetRegion
+        ? people.filter((person) => person.height >= video.videoHeight * 0.18 && pointInside(targetRegion, person.x + person.width / 2, person.y + person.height))
+        : [];
+
+      let helmets: VideoBox[] = [];
+      if (targetBike && checkedPeople.length) {
+        const crop = cropAround([targetBike, ...checkedPeople], video.videoWidth, video.videoHeight);
+        const helmetFrame = prepareFrame(video, scratchRef.current, crop);
+        const helmetOutput = await models.helmet.run({ images: helmetFrame.tensor });
+        const helmetTensor = helmetOutput[models.helmet.outputNames[0]];
+        helmets = readOutput(
+          helmetTensor,
+          [{ id: 0, label: "helmet" }, { id: 1, label: "no helmet" }],
+          helmetFrame.scale,
+          helmetFrame.padX,
+          helmetFrame.padY,
+          helmetFrame.sourceWidth,
+          helmetFrame.sourceHeight,
+          0.35,
+          helmetFrame.sourceX,
+          helmetFrame.sourceY,
+        );
+      }
+
       overlay.width = video.videoWidth;
       overlay.height = video.videoHeight;
       const context = overlay.getContext("2d")!;
       context.clearRect(0, 0, overlay.width, overlay.height);
-      for (const bike of bikes) drawTag(context, bike, `motorcycle ${bike.score.toFixed(2)}`, "#35b9e8");
+      for (const bike of bikes) {
+        const close = bike === targetBike;
+        drawTag(context, bike, close ? "motorcycle — close enough" : "motorcycle — too far to check", close ? "#35b9e8" : "#78878e");
+      }
+
       let noHelmet = 0;
-      for (const person of people) {
+      const nextHistory: HelmetMemory[] = [];
+      for (const person of checkedPeople) {
         const mark = helmets
           .filter((helmet) => pointInside(person, helmet.x + helmet.width / 2, helmet.y + helmet.height / 2, true))
           .sort((a, b) => b.score - a.score)[0];
-        const label = mark?.label ?? "rider / helmet uncertain";
-        const color = mark?.label === "no helmet" ? "#ef514b" : mark?.label === "helmet" ? "#4dcc85" : "#e1ad36";
-        if (mark?.label === "no helmet") noHelmet += 1;
-        drawTag(context, person, `${label} ${(mark?.score ?? person.score).toFixed(2)}`, color);
+        const minimum = mark?.label === "no helmet" ? 0.58 : 0.55;
+        const reliable = mark && mark.score >= minimum ? mark : null;
+        if (!reliable) {
+          drawTag(context, person, "helmet uncertain", "#e1ad36");
+          continue;
+        }
+        const centerX = person.x + person.width / 2;
+        const centerY = person.y + person.height / 2;
+        const previous = helmetHistory.current.find((item) => item.label === reliable.label && Math.hypot(item.x - centerX, item.y - centerY) < Math.max(person.width, person.height) * 0.75);
+        const memory = { x: centerX, y: centerY, label: reliable.label, streak: (previous?.streak ?? 0) + 1 };
+        nextHistory.push(memory);
+        const confirmed = memory.streak >= 2;
+        const label = confirmed ? reliable.label : `checking ${reliable.label}`;
+        const color = !confirmed ? "#e1ad36" : reliable.label === "no helmet" ? "#ef514b" : "#4dcc85";
+        if (confirmed && reliable.label === "no helmet") noHelmet += 1;
+        drawTag(context, person, `${label} ${reliable.score.toFixed(2)}`, color);
       }
+      helmetHistory.current = nextHistory;
+
       let triple = 0;
-      for (const bike of bikes) {
-        const region: VideoBox = {
-          ...bike,
-          x: bike.x - bike.width * 0.35,
-          y: bike.y - bike.height * 1.7,
-          width: bike.width * 1.7,
-          height: bike.height * 2.95,
-        };
-        const riderCount = people.filter((person) => pointInside(region, person.x + person.width / 2, person.y + person.height)).length;
+      for (const bike of closeBikes) {
+        const region = riderRegion(bike);
+        const riderCount = people.filter((person) => person.height >= video.videoHeight * 0.18 && pointInside(region, person.x + person.width / 2, person.y + person.height)).length;
         if (riderCount >= 3) {
           triple += 1;
           drawTag(context, bike, `triple-riding candidate (${riderCount})`, "#ff8a3d");
         }
       }
-      setResult({ bikes: bikes.length, riders: people.length, noHelmet, triple, took: Math.round(performance.now() - started) });
-      setModelState(video.paused ? "Frame analysed" : "Detecting while video plays");
+      setResult({ bikes: bikes.length, riders: checkedPeople.length, noHelmet, triple, took: Math.round(performance.now() - started) });
+      if (!checkedPeople.length) setModelState("Frame checked — riders are too far for a helmet result");
+      else setModelState(video.paused ? "Close riders checked" : "Checking close riders while video plays");
     } catch (error) {
       setModelState(error instanceof Error ? `Detection error: ${error.message}` : "Could not analyse this frame");
     } finally {
@@ -337,6 +415,7 @@ function LiveVideoDetector() {
     void video.play().catch(() => undefined);
     setFileName(file.name);
     setResult({ bikes: 0, riders: 0, noHelmet: 0, triple: 0, took: 0 });
+    helmetHistory.current = [];
     setModelState("Video selected — loading first frame");
   };
 
@@ -350,6 +429,7 @@ function LiveVideoDetector() {
     void video.play().catch(() => undefined);
     setFileName("Built-in road sample");
     setResult({ bikes: 0, riders: 0, noHelmet: 0, triple: 0, took: 0 });
+    helmetHistory.current = [];
   };
 
   return (
@@ -380,12 +460,12 @@ function LiveVideoDetector() {
           <h3>{modelState}</h3>
           <dl>
             <div><dt>{result.bikes}</dt><dd>motorcycles</dd></div>
-            <div><dt>{result.riders}</dt><dd>people near bikes</dd></div>
-            <div><dt>{result.noHelmet}</dt><dd>possible no-helmet cases</dd></div>
+            <div><dt>{result.riders}</dt><dd>close riders checked</dd></div>
+            <div><dt>{result.noHelmet}</dt><dd>confirmed no-helmet cases</dd></div>
             <div><dt>{result.triple}</dt><dd>possible triple riding</dd></div>
           </dl>
           <p>{result.took ? `Last frame took ${(result.took / 1000).toFixed(1)} seconds on this device.` : "Nothing has been checked yet."}</p>
-          <p className="run-caveat">Your video stays on this device. The boxes can be wrong in crowded or dark scenes. Signal jumping is left out of uploaded videos because it needs one fixed camera with a marked stop line.</p>
+          <p className="run-caveat">Distant riders are deliberately left unclassified. A helmet result needs a close rider, stronger confidence and the same result in two checks. Your video stays on this device.</p>
         </aside>
       </div>
     </div>
