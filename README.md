@@ -24,6 +24,8 @@ The project watches motorcycles and riders in video and checks three things: hel
 
 The first part of the website is a normal video player with a file picker. YOLO11 finds motorcycles and people in the current frame, while a separate helmet model predicts `With Helmet` or `Without Helmet`. The boxes are drawn live in the browser; they are not part of the video. The selected file stays on the device and is not uploaded. The page also keeps five small simulated cases so each rule is easy to test on demand.
 
+One small thing before trying it: wait until the note above the video turns green and says **“Models ready.”** The first visit downloads both models, so this can take a while on a slower connection. The sample and file buttons stay unavailable until that is finished. Once the green message appears, play the sample or choose your own video.
+
 The `backend` folder has the Python code for video input, tracking, rider-to-bike matching, stop-line crossing, event confirmation and saving evidence. It also has a small deterministic simulation and six unit tests.
 
 At the moment:
@@ -35,7 +37,7 @@ At the moment:
 - all six Python tests pass;
 - Raspberry Pi speed testing and training on footage from the final camera angle are still left to do.
 
-The first model download is fairly large and inference speed depends on the laptop or phone. The output is still a model suggestion rather than verified ground truth. Signal jumping is not guessed for arbitrary uploads because that rule needs a fixed, calibrated stop line and signal region.
+The first model download is fairly large and inference speed depends on the laptop or phone. The counts are suggestions from the models, not verified ground truth. Signal jumping is not guessed for arbitrary uploads because that rule needs a fixed, calibrated stop line and signal region.
 
 ## Running the website
 
@@ -70,6 +72,8 @@ RED_LIGHT_CROSSING
 ```
 
 ## Trying a real video
+
+For the quickest test, open the deployed page, wait for the green **Models ready** message, then press play on the built-in sample. You can use **Choose your video** after that. The video remains on your device.
 
 Install the Python packages first:
 

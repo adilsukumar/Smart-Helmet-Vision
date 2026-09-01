@@ -55,6 +55,10 @@ h1 { max-width: 910px; margin: 0; font-family: Georgia, "Times New Roman", serif
 .real-demo-section { background: #e5e1d7; }
 .real-badge { display: inline-flex; align-items: center; gap: 8px; color: #4b5a61; font: 750 11px/1 monospace; letter-spacing: .08em; }
 .real-badge i { width: 8px; height: 8px; border-radius: 50%; background: #d85547; box-shadow: 0 0 0 5px rgba(216,85,71,.1); }
+.model-wait-note { max-width: 1320px; margin: 0 auto 12px; padding: 12px 16px; display: flex; align-items: center; gap: 10px; border: 1px solid #d1b55d; background: #fff6d7; color: #594b1c; font-size: 14px; line-height: 1.4; }
+.model-wait-note > span { width: 9px; height: 9px; flex: 0 0 auto; border-radius: 50%; background: #d79828; box-shadow: 0 0 0 5px rgba(215,152,40,.14); }
+.model-wait-note.ready { border-color: #79ad8c; background: #e8f5eb; color: #214d31; }
+.model-wait-note.ready > span { background: #3f9d63; box-shadow: 0 0 0 5px rgba(63,157,99,.14); }
 .live-detector { max-width: 1320px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(290px, .7fr); border: 1px solid #b9b4a8; background: #172128; }
 .live-video-column { min-width: 0; border-right: 1px solid #3b474d; background: #0d1418; }
 .live-video-stage { position: relative; min-height: 280px; display: grid; place-items: center; overflow: hidden; background: #0d1418; }
@@ -63,6 +67,7 @@ h1 { max-width: 910px; margin: 0; font-family: Georgia, "Times New Roman", serif
 .video-picker { min-height: 58px; padding: 9px 12px; display: flex; align-items: center; gap: 9px; border-top: 1px solid #3b474d; }
 .video-picker button, .upload-button { min-height: 38px; padding: 0 14px; display: inline-flex; align-items: center; border: 1px solid #627078; color: #edf0f1; background: #26343a; cursor: pointer; font-size: 13px; font-weight: 750; }
 .upload-button { color: #172128; background: #f0c548; border-color: #f0c548; }
+.video-picker button:disabled, .upload-button.disabled { opacity: .45; cursor: wait; }
 .upload-button input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .video-picker > span { min-width: 0; margin-left: auto; color: #8e9ca3; font: 11px/1.3 monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .live-readout { padding: 30px; color: #e9ecec; }

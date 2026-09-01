@@ -229,7 +229,8 @@ function LiveVideoDetector() {
   const running = useRef(false);
   const lastRun = useRef(0);
   const animation = useRef(0);
-  const [modelState, setModelState] = useState("Loading detection models…");
+  const [modelState, setModelState] = useState("Please wait — the models are still loading");
+  const [modelsReady, setModelsReady] = useState(false);
   const [fileName, setFileName] = useState("Built-in road sample");
   const [result, setResult] = useState<FrameResult>({ bikes: 0, riders: 0, noHelmet: 0, triple: 0, took: 0 });
 
@@ -297,10 +298,14 @@ function LiveVideoDetector() {
       .then((models) => {
         if (!active) return;
         modelsRef.current = models;
-        setModelState("Models ready — press play or choose a video");
+        setModelsReady(true);
+        setModelState("Models ready — now play or choose a video");
         void analyse();
       })
-      .catch((error) => setModelState(error instanceof Error ? `Model load failed: ${error.message}` : "Model load failed"));
+      .catch((error) => {
+        setModelsReady(false);
+        setModelState(error instanceof Error ? `Model load failed: ${error.message}` : "Model load failed");
+      });
     const tick = (time: number) => {
       const video = videoRef.current;
       if (video && !video.paused && time - lastRun.current > 1500) {
@@ -319,7 +324,7 @@ function LiveVideoDetector() {
 
   const chooseVideo = (file?: File) => {
     const video = videoRef.current;
-    if (!file || !video) return;
+    if (!file || !video || !modelsReady) return;
     if (objectUrl.current) URL.revokeObjectURL(objectUrl.current);
     objectUrl.current = URL.createObjectURL(file);
     video.src = objectUrl.current;
@@ -332,7 +337,7 @@ function LiveVideoDetector() {
 
   const useSample = () => {
     const video = videoRef.current;
-    if (!video) return;
+    if (!video || !modelsReady) return;
     if (objectUrl.current) URL.revokeObjectURL(objectUrl.current);
     objectUrl.current = null;
     video.src = "/sample-traffic.mp4";
@@ -343,33 +348,41 @@ function LiveVideoDetector() {
   };
 
   return (
-    <div className="live-detector">
-      <div className="live-video-column">
-        <div className="live-video-stage">
-          <video ref={videoRef} src="/sample-traffic.mp4" controls muted autoPlay loop playsInline preload="metadata" onLoadedData={() => void analyse()} onSeeked={() => void analyse()} />
-          <canvas ref={overlayRef} />
-        </div>
-        <div className="video-picker">
-          <label className="upload-button">
-            Choose your video
-            <input type="file" accept="video/mp4,video/webm,video/ogg,video/*" onChange={(event) => chooseVideo(event.target.files?.[0])} />
-          </label>
-          <button type="button" onClick={useSample}>Use sample</button>
-          <span title={fileName}>{fileName}</span>
-        </div>
+    <div>
+      <div className={`model-wait-note ${modelsReady ? "ready" : "loading"}`} role="status">
+        <span aria-hidden="true" />
+        {modelsReady
+          ? "Models ready. You can play the sample or choose your own video now."
+          : "Please wait here until both models finish loading. The first visit can take a while."}
       </div>
-      <aside className="live-readout" aria-live="polite">
-        <span className="label">Live frame result</span>
-        <h3>{modelState}</h3>
-        <dl>
-          <div><dt>{result.bikes}</dt><dd>motorcycles</dd></div>
-          <div><dt>{result.riders}</dt><dd>associated people</dd></div>
-          <div><dt>{result.noHelmet}</dt><dd>no-helmet detections</dd></div>
-          <div><dt>{result.triple}</dt><dd>triple-riding candidates</dd></div>
-        </dl>
-        <p>{result.took ? `Last frame took ${(result.took / 1000).toFixed(1)} seconds on this device.` : "The first model load is large and may take a little time."}</p>
-        <p className="run-caveat">The video is analysed inside your browser and is not uploaded. Results depend on angle, lighting and video quality. Signal jumping still needs a stop line and signal region configured for one fixed camera.</p>
-      </aside>
+      <div className="live-detector">
+        <div className="live-video-column">
+          <div className="live-video-stage">
+            <video ref={videoRef} src="/sample-traffic.mp4" controls muted loop playsInline preload="metadata" onPlay={(event) => { if (!modelsReady) event.currentTarget.pause(); }} onLoadedData={() => void analyse()} onSeeked={() => void analyse()} />
+            <canvas ref={overlayRef} />
+          </div>
+          <div className="video-picker">
+            <label className={`upload-button ${modelsReady ? "" : "disabled"}`} aria-disabled={!modelsReady}>
+              Choose your video
+              <input disabled={!modelsReady} type="file" accept="video/mp4,video/webm,video/ogg,video/*" onChange={(event) => chooseVideo(event.target.files?.[0])} />
+            </label>
+            <button disabled={!modelsReady} type="button" onClick={useSample}>Use sample</button>
+            <span title={fileName}>{fileName}</span>
+          </div>
+        </div>
+        <aside className="live-readout" aria-live="polite">
+          <span className="label">What it found</span>
+          <h3>{modelState}</h3>
+          <dl>
+            <div><dt>{result.bikes}</dt><dd>motorcycles</dd></div>
+            <div><dt>{result.riders}</dt><dd>people near bikes</dd></div>
+            <div><dt>{result.noHelmet}</dt><dd>possible no-helmet cases</dd></div>
+            <div><dt>{result.triple}</dt><dd>possible triple riding</dd></div>
+          </dl>
+          <p>{result.took ? `Last frame took ${(result.took / 1000).toFixed(1)} seconds on this device.` : "Nothing has been checked yet."}</p>
+          <p className="run-caveat">Your video stays on this device. The boxes can be wrong in crowded or dark scenes. Signal jumping is left out of uploaded videos because it needs one fixed camera with a marked stop line.</p>
+        </aside>
+      </div>
     </div>
   );
 }
@@ -458,10 +471,10 @@ function App() {
       <main id="top">
         <section className="hero">
           <div className="eyebrow">Raspberry Pi + camera + computer vision</div>
-          <h1>Motorcycle safety events, explained frame by frame.</h1>
+          <h1>A small traffic-video detector built for the internship task.</h1>
           <p className="hero-copy">
-            A working computer-vision prototype for helmet use, triple riding and red-light crossing.
-            Choose a normal video file and the models analyse its frames directly in your browser.
+            It looks for motorcycles, riders and helmet use in an ordinary video. Try the road sample first,
+            then choose a file from your own device. The signal-jumping rule is shown separately below.
           </p>
           <div className="hero-actions">
             <a className="primary-link" href="#real-demo">Watch the real run</a>
@@ -474,8 +487,8 @@ function App() {
 
         <section className="real-demo-section" id="real-demo">
           <div className="section-heading">
-            <div><span className="section-number">01</span><h2>Try a real video</h2></div>
-            <span className="real-badge"><i /> BROWSER INFERENCE</span>
+            <div><span className="section-number">01</span><h2>Try it with a video</h2></div>
+            <span className="real-badge"><i /> RUNS IN THIS TAB</span>
           </div>
           <LiveVideoDetector />
           <p className="video-credit">The built-in sample is “Busy Indian Street with Traffic and Motorbikes” by Aamir Somewhere, used under the Pexels license. You can replace it with your own video above.</p>
