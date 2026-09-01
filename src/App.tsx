@@ -113,14 +113,17 @@ type FrameResult = {
 const inputSize = 416;
 let browserModels: Promise<{ traffic: ort.InferenceSession; helmet: ort.InferenceSession }> | null = null;
 
-function loadBrowserModels() {
+function loadBrowserModels(onProgress?: (message: string) => void) {
   if (!browserModels) {
     ort.env.wasm.numThreads = 1;
     ort.env.wasm.proxy = false;
-    browserModels = Promise.all([
-      ort.InferenceSession.create("/models/traffic.onnx", { executionProviders: ["wasm"] }),
-      ort.InferenceSession.create("/models/helmet.onnx", { executionProviders: ["wasm"] }),
-    ]).then(([traffic, helmet]) => ({ traffic, helmet }));
+    browserModels = (async () => {
+      onProgress?.("Loading traffic model — 1 of 2");
+      const traffic = await ort.InferenceSession.create("/models/traffic.onnx", { executionProviders: ["wasm"] });
+      onProgress?.("Traffic model ready — loading helmet model 2 of 2");
+      const helmet = await ort.InferenceSession.create("/models/helmet.onnx", { executionProviders: ["wasm"] });
+      return { traffic, helmet };
+    })();
   }
   return browserModels;
 }
@@ -294,7 +297,9 @@ function LiveVideoDetector() {
 
   useEffect(() => {
     let active = true;
-    loadBrowserModels()
+    loadBrowserModels((message) => {
+      if (active) setModelState(message);
+    })
       .then((models) => {
         if (!active) return;
         modelsRef.current = models;
@@ -353,7 +358,7 @@ function LiveVideoDetector() {
         <span aria-hidden="true" />
         {modelsReady
           ? "Models ready. You can play the sample or choose your own video now."
-          : "Please wait here until both models finish loading. The first visit can take a while."}
+          : "Please wait until both models finish loading. The step being loaded is shown on the right."}
       </div>
       <div className="live-detector">
         <div className="live-video-column">
@@ -649,7 +654,7 @@ function App() {
             <a href="https://www.aicitychallenge.org/2024-data-and-evaluation/" target="_blank" rel="noreferrer"><span>Dataset</span><strong>AI City Challenge 2024 · Helmet-rule Track 5</strong><i>↗</i></a>
             <a href="https://www.raspberrypi.com/documentation/accessories/ai-camera.html" target="_blank" rel="noreferrer"><span>Hardware</span><strong>Raspberry Pi AI Camera documentation</strong><i>↗</i></a>
             <a href="https://docs.ultralytics.com/guides/raspberry-pi" target="_blank" rel="noreferrer"><span>Deployment</span><strong>Ultralytics Raspberry Pi and NCNN guide</strong><i>↗</i></a>
-            <a href="https://huggingface.co/nnsohamnn/helmet-detection-yolo11" target="_blank" rel="noreferrer"><span>Demo model</span><strong>Helmet Detection YOLO11 · MIT licensed weights</strong><i>↗</i></a>
+            <a href="https://huggingface.co/iam-tsr/yolov8n-helmet-detection" target="_blank" rel="noreferrer"><span>Demo model</span><strong>Lightweight YOLOv8n helmet model · MIT licensed</strong><i>↗</i></a>
             <a href="https://www.pexels.com/video/busy-indian-street-with-traffic-and-motorbikes-34394424/" target="_blank" rel="noreferrer"><span>Demo video</span><strong>Pexels traffic footage · Aamir Somewhere</strong><i>↗</i></a>
             <a href="https://www.indiacode.nic.in/handle/123456789/13700?locale=en" target="_blank" rel="noreferrer"><span>Rules</span><strong>Motor Vehicles Act · Sections 128 and 129</strong><i>↗</i></a>
           </div>

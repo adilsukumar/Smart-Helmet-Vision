@@ -2,9 +2,9 @@
 
 I made this as a practical starting point for the internship topic: helmet detection, triple riding and signal jumping using a Raspberry Pi, camera and machine learning. It is not only a proposal now. The repository has an uploadable video detector, a browser rule demo, working Python code and tests.
 
-The website accepts a normal video from the user’s device. A YOLO11 model finds motorcycles and people in the current frame, while a separate YOLO11 helmet model checks for “With Helmet” and “Without Helmet”. The detections are drawn on a canvas above the original video, so they are produced for whichever file is selected instead of being baked into a prepared result. The selected video stays inside the browser and is not uploaded.
+The website accepts a normal video from the user’s device. A YOLO11 model finds motorcycles and people in the current frame, while a lightweight YOLOv8n helmet model checks for “With Helmet” and “Without Helmet”. The detections are drawn on a canvas above the original video, so they are produced for whichever file is selected instead of being baked into a prepared result. The selected video stays inside the browser and is not uploaded.
 
-To try it, I first wait for the note above the video to turn green and say “Models ready”. The first visit takes a little time because both model files have to download. After that I can play the built-in road sample or choose any browser-supported video from my device. The controls are kept unavailable until the models are ready so the loading step is clear.
+To try it, I first wait for the note above the video to turn green and say “Models ready”. The page shows whether it is loading model 1 or model 2. After that I can play the built-in road sample or choose any browser-supported video from my device. The controls are kept unavailable until the models are ready so the loading step is clear. I also replaced the earlier 80 MB helmet export with an approximately 12 MB version because the larger one could stall in the browser.
 
 The live page reports motorcycles, riders, no-helmet detections and triple-riding candidates for the frames it analyses. I am deliberately calling them candidates because crowded scenes and poor camera angles can create incorrect rider-to-bike associations. Signal jumping is not guessed for arbitrary uploads: it needs one fixed camera with a calibrated stop line and signal area. The rule sandbox demonstrates that logic, and the Python code supports the actual configuration.
 
@@ -18,7 +18,7 @@ Research and assets I used:
 - Raspberry Pi AI Camera: https://www.raspberrypi.com/documentation/accessories/ai-camera.html
 - Ultralytics tracking: https://docs.ultralytics.com/modes/track/
 - Ultralytics Raspberry Pi / NCNN guide: https://docs.ultralytics.com/guides/raspberry-pi/
-- MIT-licensed helmet model used for this demo: https://huggingface.co/nnsohamnn/helmet-detection-yolo11
+- MIT-licensed lightweight helmet model used for this demo: https://huggingface.co/iam-tsr/yolov8n-helmet-detection
 - Pexels source video by Aamir Somewhere: https://www.pexels.com/video/busy-indian-street-with-traffic-and-motorbikes-34394424/
 - Motor Vehicles Act, 1988: https://www.indiacode.nic.in/handle/123456789/13700?locale=en
 
