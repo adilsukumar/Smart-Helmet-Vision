@@ -1,6 +1,5 @@
 import { StrictMode, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import * as ort from "onnxruntime-web/wasm";
 import "./styles.css";
 
 type ScenarioId = "combined" | "helmet" | "triple" | "signal" | "safe";
@@ -112,21 +111,57 @@ type FrameResult = {
 
 type FrameCrop = { x: number; y: number; width: number; height: number };
 type HelmetMemory = { x: number; y: number; label: string; streak: number };
+type ModelName = "traffic" | "helmet";
+type ModelOutput = { data: Float32Array; dims: number[] };
+type BrowserModels = { run: (model: ModelName, data: Float32Array) => Promise<ModelOutput> };
 
 const inputSize = 320;
-let browserModels: Promise<{ traffic: ort.InferenceSession; helmet: ort.InferenceSession }> | null = null;
+const detectionInterval = 500;
+let browserModels: Promise<BrowserModels> | null = null;
 
 function loadBrowserModels(onProgress?: (message: string) => void) {
   if (!browserModels) {
-    ort.env.wasm.numThreads = 1;
-    ort.env.wasm.proxy = false;
-    browserModels = (async () => {
-      onProgress?.("Loading traffic model — 1 of 2");
-      const traffic = await ort.InferenceSession.create("/models/traffic.onnx", { executionProviders: ["wasm"] });
-      onProgress?.("Traffic model ready — loading helmet model 2 of 2");
-      const helmet = await ort.InferenceSession.create("/models/helmet.onnx", { executionProviders: ["wasm"] });
-      return { traffic, helmet };
-    })();
+    browserModels = new Promise((resolve, reject) => {
+      const worker = new Worker(new URL("./detector.worker.ts", import.meta.url), { type: "module" });
+      const waiting = new Map<number, { resolve: (output: ModelOutput) => void; reject: (error: Error) => void }>();
+      let requestId = 0;
+
+      worker.onmessage = (event) => {
+        const message = event.data;
+        if (message.type === "progress") {
+          onProgress?.(message.message);
+          return;
+        }
+        if (message.type === "ready") {
+          resolve({
+            run: (model, data) => new Promise((finish, fail) => {
+              const id = ++requestId;
+              waiting.set(id, { resolve: finish, reject: fail });
+              worker.postMessage({ type: "run", id, model, data }, [data.buffer]);
+            }),
+          });
+          return;
+        }
+        if (message.type === "result") {
+          const request = waiting.get(message.id);
+          if (!request) return;
+          waiting.delete(message.id);
+          request.resolve({ data: message.data, dims: message.dims });
+          return;
+        }
+        if (message.type === "error") {
+          const error = new Error(message.message);
+          if (!message.id) reject(error);
+          const request = waiting.get(message.id);
+          if (request) {
+            waiting.delete(message.id);
+            request.reject(error);
+          }
+        }
+      };
+      worker.onerror = () => reject(new Error("Detection worker could not start"));
+      worker.postMessage({ type: "load" });
+    });
   }
   return browserModels;
 }
@@ -148,7 +183,7 @@ function nms(boxes: VideoBox[], threshold = 0.45) {
 }
 
 function readOutput(
-  tensor: ort.Tensor,
+  tensor: ModelOutput,
   classes: Array<{ id: number; label: string }>,
   scale: number,
   padX: number,
@@ -161,7 +196,7 @@ function readOutput(
 ) {
   const channels = tensor.dims[1];
   const anchors = tensor.dims[2];
-  const values = tensor.data as Float32Array;
+  const values = tensor.data;
   const boxes: VideoBox[] = [];
   for (let index = 0; index < anchors; index += 1) {
     let selected = classes[0];
@@ -211,7 +246,7 @@ function prepareFrame(video: HTMLVideoElement, scratch: HTMLCanvasElement, crop?
     input[plane + i] = pixels[i * 4 + 1] / 255;
     input[plane * 2 + i] = pixels[i * 4 + 2] / 255;
   }
-  return { tensor: new ort.Tensor("float32", input, [1, 3, inputSize, inputSize]), scale, padX, padY, sourceX, sourceY, sourceWidth, sourceHeight };
+  return { input, scale, padX, padY, sourceX, sourceY, sourceWidth, sourceHeight };
 }
 
 function pointInside(box: VideoBox, x: number, y: number, upperOnly = false) {
@@ -259,11 +294,17 @@ function drawTag(context: CanvasRenderingContext2D, box: VideoBox, text: string,
   context.fillText(text, box.x + 6, top + 18);
 }
 
+function drawBox(context: CanvasRenderingContext2D, box: VideoBox, color: string) {
+  context.strokeStyle = color;
+  context.lineWidth = Math.max(2, context.canvas.width / 600);
+  context.strokeRect(box.x, box.y, box.width, box.height);
+}
+
 function LiveVideoDetector() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
   const scratchRef = useRef(document.createElement("canvas"));
-  const modelsRef = useRef<{ traffic: ort.InferenceSession; helmet: ort.InferenceSession } | null>(null);
+  const modelsRef = useRef<BrowserModels | null>(null);
   const objectUrl = useRef<string | null>(null);
   const running = useRef(false);
   const lastRun = useRef(0);
@@ -283,9 +324,8 @@ function LiveVideoDetector() {
     const started = performance.now();
     try {
       const frame = prepareFrame(video, scratchRef.current);
-      const trafficOutput = await models.traffic.run({ images: frame.tensor });
+      const trafficTensor = await models.run("traffic", frame.input);
       const common = [frame.scale, frame.padX, frame.padY, frame.sourceWidth, frame.sourceHeight] as const;
-      const trafficTensor = trafficOutput[models.traffic.outputNames[0]];
       const traffic = readOutput(trafficTensor, [{ id: 0, label: "person" }, { id: 3, label: "motorcycle" }], ...common, 0.28);
       const people = traffic.filter((box) => box.label === "person");
       const bikes = traffic.filter((box) => box.label === "motorcycle");
@@ -302,8 +342,7 @@ function LiveVideoDetector() {
       if (targetBike && checkedPeople.length) {
         const crop = cropAround([targetBike, ...checkedPeople], video.videoWidth, video.videoHeight);
         const helmetFrame = prepareFrame(video, scratchRef.current, crop);
-        const helmetOutput = await models.helmet.run({ images: helmetFrame.tensor });
-        const helmetTensor = helmetOutput[models.helmet.outputNames[0]];
+        const helmetTensor = await models.run("helmet", helmetFrame.input);
         helmets = readOutput(
           helmetTensor,
           [{ id: 0, label: "helmet" }, { id: 1, label: "no helmet" }],
@@ -322,10 +361,7 @@ function LiveVideoDetector() {
       overlay.height = video.videoHeight;
       const context = overlay.getContext("2d")!;
       context.clearRect(0, 0, overlay.width, overlay.height);
-      for (const bike of bikes) {
-        const close = bike === targetBike;
-        drawTag(context, bike, close ? "motorcycle — close enough" : "motorcycle — too far to check", close ? "#35b9e8" : "#78878e");
-      }
+      if (targetBike && checkedPeople.length) drawBox(context, targetBike, "#35b9e8");
 
       let noHelmet = 0;
       const nextHistory: HelmetMemory[] = [];
@@ -336,7 +372,7 @@ function LiveVideoDetector() {
         const minimum = mark?.label === "no helmet" ? 0.58 : 0.55;
         const reliable = mark && mark.score >= minimum ? mark : null;
         if (!reliable) {
-          drawTag(context, person, "helmet uncertain", "#e1ad36");
+          drawBox(context, person, "#e1ad36");
           continue;
         }
         const centerX = person.x + person.width / 2;
@@ -345,10 +381,13 @@ function LiveVideoDetector() {
         const memory = { x: centerX, y: centerY, label: reliable.label, streak: (previous?.streak ?? 0) + 1 };
         nextHistory.push(memory);
         const confirmed = memory.streak >= 2;
-        const label = confirmed ? reliable.label : `checking ${reliable.label}`;
-        const color = !confirmed ? "#e1ad36" : reliable.label === "no helmet" ? "#ef514b" : "#4dcc85";
+        if (!confirmed) {
+          drawBox(context, person, "#e1ad36");
+          continue;
+        }
+        const color = reliable.label === "no helmet" ? "#ef514b" : "#4dcc85";
         if (confirmed && reliable.label === "no helmet") noHelmet += 1;
-        drawTag(context, person, `${label} ${reliable.score.toFixed(2)}`, color);
+        drawTag(context, person, `${reliable.label} ${reliable.score.toFixed(2)}`, color);
       }
       helmetHistory.current = nextHistory;
 
@@ -361,8 +400,8 @@ function LiveVideoDetector() {
           drawTag(context, bike, `triple-riding candidate (${riderCount})`, "#ff8a3d");
         }
       }
-      setResult({ bikes: bikes.length, riders: checkedPeople.length, noHelmet, triple, took: Math.round(performance.now() - started) });
-      if (!checkedPeople.length) setModelState("Frame checked — riders are too far for a helmet result");
+      setResult({ bikes: targetBike && checkedPeople.length ? 1 : 0, riders: checkedPeople.length, noHelmet, triple, took: Math.round(performance.now() - started) });
+      if (!checkedPeople.length) setModelState(video.paused ? "Ready" : "Watching video…");
       else setModelState(video.paused ? "Close riders checked" : "Checking close riders while video plays");
     } catch (error) {
       setModelState(error instanceof Error ? `Detection error: ${error.message}` : "Could not analyse this frame");
@@ -390,7 +429,7 @@ function LiveVideoDetector() {
       });
     const tick = (time: number) => {
       const video = videoRef.current;
-      if (video && !video.paused && time - lastRun.current > 1500) {
+      if (video && !video.paused && time - lastRun.current > detectionInterval) {
         lastRun.current = time;
         void analyse();
       }
@@ -464,7 +503,7 @@ function LiveVideoDetector() {
             <div><dt>{result.triple}</dt><dd>possible triple riding</dd></div>
           </dl>
           <p>{result.took ? `Last frame took ${(result.took / 1000).toFixed(1)} seconds on this device.` : "Nothing has been checked yet."}</p>
-          <p className="run-caveat">Distant riders are deliberately left unclassified. A helmet result needs a close rider, stronger confidence and the same result in two checks. Your video stays on this device.</p>
+          <p className="run-caveat">Only close results that repeat with strong confidence are labelled. Your video stays on this device.</p>
         </aside>
       </div>
     </div>
