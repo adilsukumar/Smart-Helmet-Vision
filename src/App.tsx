@@ -342,6 +342,7 @@ function LiveVideoDetector() {
   const helmetHistory = useRef<HelmetMemory[]>([]);
   const bikeTracks = useRef<SessionTrack[]>([]);
   const riderTracks = useRef<SessionTrack[]>([]);
+  const noHelmetTracks = useRef<SessionTrack[]>([]);
   const tripleWasVisible = useRef(false);
   const sessionId = useRef(0);
   const [modelState, setModelState] = useState("Please wait — the models are still loading");
@@ -400,12 +401,11 @@ function LiveVideoDetector() {
         );
       }
 
-      let noHelmet = 0;
       let drewLabel = false;
       const nextHistory: HelmetMemory[] = [];
       for (const person of checkedPeople) {
         const mark = helmets
-          .filter((helmet) => pointInside(person, helmet.x + helmet.width / 2, helmet.y + helmet.height / 2, true))
+          .filter((helmet) => pointInside(person, helmet.x + helmet.width / 2, helmet.y + helmet.height / 2) || overlap(person, helmet) > 0.12)
           .sort((a, b) => b.score - a.score)[0];
         const minimum = mark?.label === "no helmet" ? 0.58 : 0.55;
         const reliable = mark && mark.score >= minimum ? mark : null;
@@ -418,7 +418,6 @@ function LiveVideoDetector() {
         const confirmed = memory.streak >= 2;
         if (!confirmed) continue;
         const color = reliable.label === "no helmet" ? "#ef514b" : "#4dcc85";
-        if (memory.streak === 2 && reliable.label === "no helmet") noHelmet += 1;
         const frameIsCurrent = video.paused || Math.abs(video.currentTime - frameTime) < 0.75;
         if (frameIsCurrent) {
           drawTag(context, person, `${reliable.label} ${reliable.score.toFixed(2)}`, color);
@@ -426,6 +425,8 @@ function LiveVideoDetector() {
         }
       }
       helmetHistory.current = nextHistory;
+      const noHelmetMarks = helmets.filter((mark) => mark.label === "no helmet" && mark.score >= 0.7);
+      const noHelmetUpdate = updateSessionTracks(noHelmetTracks.current, noHelmetMarks, started);
 
       let triple = 0;
       for (const bike of closeBikes) {
@@ -441,12 +442,13 @@ function LiveVideoDetector() {
       if (activeSession !== sessionId.current) return;
       bikeTracks.current = bikeUpdate.tracks;
       riderTracks.current = riderUpdate.tracks;
+      noHelmetTracks.current = noHelmetUpdate.tracks;
       const newTripleCases = triple > 0 && !tripleWasVisible.current ? triple : 0;
       tripleWasVisible.current = triple > 0;
       setResult((previous) => ({
         bikes: previous.bikes + bikeUpdate.added,
         riders: previous.riders + riderUpdate.added,
-        noHelmet: previous.noHelmet + noHelmet,
+        noHelmet: previous.noHelmet + noHelmetUpdate.added,
         triple: previous.triple + newTripleCases,
         took: Math.round(performance.now() - started),
       }));
@@ -509,6 +511,7 @@ function LiveVideoDetector() {
     helmetHistory.current = [];
     bikeTracks.current = [];
     riderTracks.current = [];
+    noHelmetTracks.current = [];
     tripleWasVisible.current = false;
     setModelState("Video selected — loading first frame");
   };
@@ -529,6 +532,7 @@ function LiveVideoDetector() {
     helmetHistory.current = [];
     bikeTracks.current = [];
     riderTracks.current = [];
+    noHelmetTracks.current = [];
     tripleWasVisible.current = false;
   };
 
