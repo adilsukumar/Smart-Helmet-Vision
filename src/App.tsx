@@ -641,12 +641,6 @@ function App() {
     <div className="app-shell">
       <header className="site-header">
         <a className="brand" href="#top" aria-label="Smart Helmet Vision home">
-          <span className="brand-mark" aria-hidden="true">
-            <svg viewBox="0 0 32 32">
-              <path d="M6 18c0-7 4-12 11-12 6 0 10 5 10 11v2h-9c-2 0-3 1-3 3v4H9v-5c-2 0-3-1-3-3Z" />
-              <path d="M18 19h9" />
-            </svg>
-          </span>
           <span>Smart Helmet Vision</span>
         </a>
         <nav aria-label="Main navigation">
@@ -659,15 +653,16 @@ function App() {
 
       <main id="top">
         <section className="hero">
-          <div className="eyebrow">Raspberry Pi + camera + computer vision</div>
-          <h1>A small traffic-video detector built for the internship task.</h1>
+          <div className="eyebrow">Internship prototype</div>
+          <h1>Smart Helmet Vision</h1>
           <p className="hero-copy">
-            It looks for motorcycles, riders and helmet use in an ordinary video. Try the road sample first,
-            then choose a file from your own device. The signal-jumping rule is shown separately below.
+            A working software prototype for detecting motorcycles, riders and helmet use in traffic video.
+            Try the sample or choose a video from your device. I have also included the rule logic I would
+            use later for triple riding and signal jumping.
           </p>
           <div className="hero-actions">
-            <a className="primary-link" href="#real-demo">Watch the real run</a>
-            <a className="secondary-link" href="#system">See the pipeline</a>
+            <a className="primary-link" href="#real-demo">Try the video detector</a>
+            <a className="secondary-link" href="#system">How it works</a>
           </div>
           <div className="truth-note">
             <strong>Current status:</strong> uploadable video inference and the rule engine are working. Raspberry Pi benchmarking still needs the actual hardware.
@@ -676,8 +671,7 @@ function App() {
 
         <section className="real-demo-section" id="real-demo">
           <div className="section-heading">
-            <div><span className="section-number">01</span><h2>Try it with a video</h2></div>
-            <span className="real-badge"><i /> RUNS IN THIS TAB</span>
+            <div><h2>Try it with a video</h2></div>
           </div>
           <LiveVideoDetector />
           <p className="video-credit">The built-in sample is “Busy Indian Street with Traffic and Motorbikes” by Aamir Somewhere, used under the Pexels license. You can replace it with your own video above.</p>
@@ -686,8 +680,7 @@ function App() {
         <section className="demo-section" id="logic-demo">
           <div className="section-heading">
             <div>
-              <span className="section-number">02</span>
-              <h2>Rule logic sandbox</h2>
+              <h2>Rule logic demo</h2>
             </div>
             <span className={`run-status ${running ? "live" : ""}`}><i />{status}</span>
           </div>
@@ -709,8 +702,8 @@ function App() {
           <div className="demo-grid">
             <div className="camera-panel">
               <div className="camera-meta">
-                <span>CAM-01 / FIXED VIEW</span>
-                <span>FRAME {Math.round(progress * 1.8).toString().padStart(3, "0")}</span>
+                <span>Fixed camera example</span>
+                <span>Frame {Math.round(progress * 1.8).toString().padStart(3, "0")}</span>
               </div>
               <svg className="traffic-scene" viewBox="0 0 900 470" role="img" aria-label="Animated traffic camera simulation">
                 <rect width="900" height="470" fill="#dfe5e8" />
@@ -770,7 +763,7 @@ function App() {
             <aside className="event-panel" aria-live="polite">
               <div className="event-panel-head">
                 <div>
-                  <small>TRACK #07</small>
+                  <small>Current run</small>
                   <h3>Event log</h3>
                 </div>
                 <strong>{events.length}</strong>
@@ -800,7 +793,7 @@ function App() {
 
         <section className="system-section" id="system">
           <div className="section-heading">
-            <div><span className="section-number">03</span><h2>How the complete system works</h2></div>
+            <div><h2>How the complete system works</h2></div>
           </div>
           <div className="pipeline">
             {[
@@ -831,7 +824,7 @@ function App() {
 
         <section className="research-section" id="research">
           <div className="section-heading">
-            <div><span className="section-number">04</span><h2>Research used</h2></div>
+            <div><h2>Research used</h2></div>
           </div>
           <p className="research-intro">I used official or primary sources for the dataset, Raspberry Pi deployment path and Indian traffic-rule context.</p>
           <div className="source-list">
@@ -849,7 +842,7 @@ function App() {
         </section>
       </main>
 
-      <footer><span>Smart Helmet Vision · Internship prototype</span><span>Rule engine tested with six automated cases</span></footer>
+      <footer><span>Smart Helmet Vision</span><span>Internship prototype · six automated rule tests</span></footer>
     </div>
   );
 }
