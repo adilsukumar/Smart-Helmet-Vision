@@ -118,8 +118,7 @@ let browserModels: Promise<{ traffic: ort.InferenceSession; helmet: ort.Inferenc
 
 function loadBrowserModels(onProgress?: (message: string) => void) {
   if (!browserModels) {
-    const hardwareThreads = navigator.hardwareConcurrency || 2;
-    ort.env.wasm.numThreads = window.crossOriginIsolated ? Math.min(4, Math.max(2, hardwareThreads - 1)) : 1;
+    ort.env.wasm.numThreads = 1;
     ort.env.wasm.proxy = false;
     browserModels = (async () => {
       onProgress?.("Loading traffic model — 1 of 2");
