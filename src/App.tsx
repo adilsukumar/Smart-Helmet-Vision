@@ -294,12 +294,6 @@ function drawTag(context: CanvasRenderingContext2D, box: VideoBox, text: string,
   context.fillText(text, box.x + 6, top + 18);
 }
 
-function drawBox(context: CanvasRenderingContext2D, box: VideoBox, color: string) {
-  context.strokeStyle = color;
-  context.lineWidth = Math.max(2, context.canvas.width / 600);
-  context.strokeRect(box.x, box.y, box.width, box.height);
-}
-
 function LiveVideoDetector() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
@@ -309,6 +303,7 @@ function LiveVideoDetector() {
   const running = useRef(false);
   const lastRun = useRef(0);
   const animation = useRef(0);
+  const clearTimer = useRef<number | null>(null);
   const helmetHistory = useRef<HelmetMemory[]>([]);
   const [modelState, setModelState] = useState("Please wait — the models are still loading");
   const [modelsReady, setModelsReady] = useState(false);
@@ -322,6 +317,12 @@ function LiveVideoDetector() {
     if (!video || !overlay || !models || video.readyState < 2 || running.current || !video.videoWidth) return;
     running.current = true;
     const started = performance.now();
+    const frameTime = video.currentTime;
+    overlay.width = video.videoWidth;
+    overlay.height = video.videoHeight;
+    const context = overlay.getContext("2d")!;
+    context.clearRect(0, 0, overlay.width, overlay.height);
+    if (clearTimer.current) window.clearTimeout(clearTimer.current);
     try {
       const frame = prepareFrame(video, scratchRef.current);
       const trafficTensor = await models.run("traffic", frame.input);
@@ -357,13 +358,8 @@ function LiveVideoDetector() {
         );
       }
 
-      overlay.width = video.videoWidth;
-      overlay.height = video.videoHeight;
-      const context = overlay.getContext("2d")!;
-      context.clearRect(0, 0, overlay.width, overlay.height);
-      if (targetBike && checkedPeople.length) drawBox(context, targetBike, "#35b9e8");
-
       let noHelmet = 0;
+      let drewLabel = false;
       const nextHistory: HelmetMemory[] = [];
       for (const person of checkedPeople) {
         const mark = helmets
@@ -371,23 +367,21 @@ function LiveVideoDetector() {
           .sort((a, b) => b.score - a.score)[0];
         const minimum = mark?.label === "no helmet" ? 0.58 : 0.55;
         const reliable = mark && mark.score >= minimum ? mark : null;
-        if (!reliable) {
-          drawBox(context, person, "#e1ad36");
-          continue;
-        }
+        if (!reliable) continue;
         const centerX = person.x + person.width / 2;
         const centerY = person.y + person.height / 2;
         const previous = helmetHistory.current.find((item) => item.label === reliable.label && Math.hypot(item.x - centerX, item.y - centerY) < Math.max(person.width, person.height) * 0.75);
         const memory = { x: centerX, y: centerY, label: reliable.label, streak: (previous?.streak ?? 0) + 1 };
         nextHistory.push(memory);
         const confirmed = memory.streak >= 2;
-        if (!confirmed) {
-          drawBox(context, person, "#e1ad36");
-          continue;
-        }
+        if (!confirmed) continue;
         const color = reliable.label === "no helmet" ? "#ef514b" : "#4dcc85";
         if (confirmed && reliable.label === "no helmet") noHelmet += 1;
-        drawTag(context, person, `${reliable.label} ${reliable.score.toFixed(2)}`, color);
+        const frameIsCurrent = video.paused || Math.abs(video.currentTime - frameTime) < 0.75;
+        if (frameIsCurrent) {
+          drawTag(context, person, `${reliable.label} ${reliable.score.toFixed(2)}`, color);
+          drewLabel = true;
+        }
       }
       helmetHistory.current = nextHistory;
 
@@ -397,8 +391,10 @@ function LiveVideoDetector() {
         const riderCount = people.filter((person) => person.height >= video.videoHeight * 0.18 && pointInside(region, person.x + person.width / 2, person.y + person.height)).length;
         if (riderCount >= 3) {
           triple += 1;
-          drawTag(context, bike, `triple-riding candidate (${riderCount})`, "#ff8a3d");
         }
+      }
+      if (drewLabel && !video.paused) {
+        clearTimer.current = window.setTimeout(() => context.clearRect(0, 0, overlay.width, overlay.height), 450);
       }
       setResult({ bikes: targetBike && checkedPeople.length ? 1 : 0, riders: checkedPeople.length, noHelmet, triple, took: Math.round(performance.now() - started) });
       if (!checkedPeople.length) setModelState(video.paused ? "Ready" : "Watching video…");
@@ -439,6 +435,7 @@ function LiveVideoDetector() {
     return () => {
       active = false;
       cancelAnimationFrame(animation.current);
+      if (clearTimer.current) window.clearTimeout(clearTimer.current);
       if (objectUrl.current) URL.revokeObjectURL(objectUrl.current);
     };
   }, []);
@@ -450,6 +447,8 @@ function LiveVideoDetector() {
     objectUrl.current = URL.createObjectURL(file);
     video.src = objectUrl.current;
     video.load();
+    const overlay = overlayRef.current;
+    if (overlay) overlay.getContext("2d")?.clearRect(0, 0, overlay.width, overlay.height);
     void video.play().catch(() => undefined);
     setFileName(file.name);
     setResult({ bikes: 0, riders: 0, noHelmet: 0, triple: 0, took: 0 });
@@ -464,6 +463,8 @@ function LiveVideoDetector() {
     objectUrl.current = null;
     video.src = "/sample-traffic.mp4";
     video.load();
+    const overlay = overlayRef.current;
+    if (overlay) overlay.getContext("2d")?.clearRect(0, 0, overlay.width, overlay.height);
     void video.play().catch(() => undefined);
     setFileName("Built-in road sample");
     setResult({ bikes: 0, riders: 0, noHelmet: 0, triple: 0, took: 0 });

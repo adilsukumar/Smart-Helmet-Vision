@@ -39,7 +39,7 @@ At the moment:
 
 The original 80 MB helmet model stalled in some browsers, so I replaced it with an approximately 12 MB browser export and changed loading to happen one model at a time. Inference speed still depends on the laptop or phone. The counts are suggestions from the models, not verified ground truth. Signal jumping is not guessed for arbitrary uploads because that rule needs a fixed, calibrated stop line and signal region.
 
-I also made the live check intentionally conservative. The browser first finds motorcycles at 320 × 320, silently ignores bikes that are too small in the frame, and runs the helmet model only around the nearest close rider group. A helmet or no-helmet label needs stronger confidence and the same result in two consecutive checks. Inference runs away from the playback thread and the page checks a new frame about twice per second, so the video can keep playing smoothly.
+I also made the live check intentionally conservative. The browser first finds motorcycles at 320 × 320, silently ignores bikes that are too small in the frame, and runs the helmet model only around the nearest close rider group. A helmet or no-helmet label needs stronger confidence and the same result in two consecutive checks. Inference runs away from the playback thread and the page checks a new frame about twice per second, so the video can keep playing smoothly. The canvas only shows confirmed green or red helmet results; working boxes and stale results are cleared instead of being left over the next frame.
 
 ## Running the website
 
