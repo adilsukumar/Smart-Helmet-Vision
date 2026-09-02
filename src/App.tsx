@@ -111,6 +111,7 @@ type FrameResult = {
 
 type FrameCrop = { x: number; y: number; width: number; height: number };
 type HelmetMemory = { x: number; y: number; label: string; streak: number };
+type SessionTrack = { x: number; y: number; width: number; height: number; lastSeen: number };
 type ModelName = "traffic" | "helmet";
 type ModelOutput = { data: Float32Array; dims: number[] };
 type BrowserModels = { run: (model: ModelName, data: Float32Array) => Promise<ModelOutput> };
@@ -294,6 +295,40 @@ function drawTag(context: CanvasRenderingContext2D, box: VideoBox, text: string,
   context.fillText(text, box.x + 6, top + 18);
 }
 
+function updateSessionTracks(oldTracks: SessionTrack[], boxes: VideoBox[], now: number) {
+  const tracks = oldTracks.filter((track) => now - track.lastSeen < 1800).map((track) => ({ ...track }));
+  const used = new Set<number>();
+  let added = 0;
+
+  for (const box of boxes) {
+    const x = box.x + box.width / 2;
+    const y = box.y + box.height / 2;
+    let closest = -1;
+    let closestDistance = Number.POSITIVE_INFINITY;
+
+    tracks.forEach((track, index) => {
+      if (used.has(index)) return;
+      const distance = Math.hypot(track.x - x, track.y - y);
+      const allowance = Math.max(70, box.width, box.height, track.width, track.height) * 1.35;
+      if (distance < allowance && distance < closestDistance) {
+        closest = index;
+        closestDistance = distance;
+      }
+    });
+
+    if (closest >= 0) {
+      tracks[closest] = { x, y, width: box.width, height: box.height, lastSeen: now };
+      used.add(closest);
+    } else {
+      tracks.push({ x, y, width: box.width, height: box.height, lastSeen: now });
+      used.add(tracks.length - 1);
+      added += 1;
+    }
+  }
+
+  return { tracks, added };
+}
+
 function LiveVideoDetector() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
@@ -305,6 +340,10 @@ function LiveVideoDetector() {
   const animation = useRef(0);
   const clearTimer = useRef<number | null>(null);
   const helmetHistory = useRef<HelmetMemory[]>([]);
+  const bikeTracks = useRef<SessionTrack[]>([]);
+  const riderTracks = useRef<SessionTrack[]>([]);
+  const tripleWasVisible = useRef(false);
+  const sessionId = useRef(0);
   const [modelState, setModelState] = useState("Please wait — the models are still loading");
   const [modelsReady, setModelsReady] = useState(false);
   const [fileName, setFileName] = useState("Built-in road sample");
@@ -316,6 +355,7 @@ function LiveVideoDetector() {
     const models = modelsRef.current;
     if (!video || !overlay || !models || video.readyState < 2 || running.current || !video.videoWidth) return;
     running.current = true;
+    const activeSession = sessionId.current;
     const started = performance.now();
     const frameTime = video.currentTime;
     overlay.width = video.videoWidth;
@@ -338,6 +378,8 @@ function LiveVideoDetector() {
       const checkedPeople = targetRegion
         ? people.filter((person) => person.height >= video.videoHeight * 0.18 && pointInside(targetRegion, person.x + person.width / 2, person.y + person.height))
         : [];
+      const bikeUpdate = updateSessionTracks(bikeTracks.current, closeBikes, started);
+      const riderUpdate = updateSessionTracks(riderTracks.current, checkedPeople, started);
 
       let helmets: VideoBox[] = [];
       if (targetBike && checkedPeople.length) {
@@ -376,7 +418,7 @@ function LiveVideoDetector() {
         const confirmed = memory.streak >= 2;
         if (!confirmed) continue;
         const color = reliable.label === "no helmet" ? "#ef514b" : "#4dcc85";
-        if (confirmed && reliable.label === "no helmet") noHelmet += 1;
+        if (memory.streak === 2 && reliable.label === "no helmet") noHelmet += 1;
         const frameIsCurrent = video.paused || Math.abs(video.currentTime - frameTime) < 0.75;
         if (frameIsCurrent) {
           drawTag(context, person, `${reliable.label} ${reliable.score.toFixed(2)}`, color);
@@ -396,7 +438,18 @@ function LiveVideoDetector() {
       if (drewLabel && !video.paused) {
         clearTimer.current = window.setTimeout(() => context.clearRect(0, 0, overlay.width, overlay.height), 450);
       }
-      setResult({ bikes: targetBike && checkedPeople.length ? 1 : 0, riders: checkedPeople.length, noHelmet, triple, took: Math.round(performance.now() - started) });
+      if (activeSession !== sessionId.current) return;
+      bikeTracks.current = bikeUpdate.tracks;
+      riderTracks.current = riderUpdate.tracks;
+      const newTripleCases = triple > 0 && !tripleWasVisible.current ? triple : 0;
+      tripleWasVisible.current = triple > 0;
+      setResult((previous) => ({
+        bikes: previous.bikes + bikeUpdate.added,
+        riders: previous.riders + riderUpdate.added,
+        noHelmet: previous.noHelmet + noHelmet,
+        triple: previous.triple + newTripleCases,
+        took: Math.round(performance.now() - started),
+      }));
       if (!checkedPeople.length) setModelState(video.paused ? "Ready" : "Watching video…");
       else setModelState(video.paused ? "Close riders checked" : "Checking close riders while video plays");
     } catch (error) {
@@ -443,6 +496,7 @@ function LiveVideoDetector() {
   const chooseVideo = (file?: File) => {
     const video = videoRef.current;
     if (!file || !video || !modelsReady) return;
+    sessionId.current += 1;
     if (objectUrl.current) URL.revokeObjectURL(objectUrl.current);
     objectUrl.current = URL.createObjectURL(file);
     video.src = objectUrl.current;
@@ -453,12 +507,16 @@ function LiveVideoDetector() {
     setFileName(file.name);
     setResult({ bikes: 0, riders: 0, noHelmet: 0, triple: 0, took: 0 });
     helmetHistory.current = [];
+    bikeTracks.current = [];
+    riderTracks.current = [];
+    tripleWasVisible.current = false;
     setModelState("Video selected — loading first frame");
   };
 
   const useSample = () => {
     const video = videoRef.current;
     if (!video || !modelsReady) return;
+    sessionId.current += 1;
     if (objectUrl.current) URL.revokeObjectURL(objectUrl.current);
     objectUrl.current = null;
     video.src = "/sample-traffic.mp4";
@@ -469,6 +527,9 @@ function LiveVideoDetector() {
     setFileName("Built-in road sample");
     setResult({ bikes: 0, riders: 0, noHelmet: 0, triple: 0, took: 0 });
     helmetHistory.current = [];
+    bikeTracks.current = [];
+    riderTracks.current = [];
+    tripleWasVisible.current = false;
   };
 
   return (
@@ -498,8 +559,8 @@ function LiveVideoDetector() {
           <span className="label">What it found</span>
           <h3>{modelState}</h3>
           <dl>
-            <div><dt>{result.bikes}</dt><dd>motorcycles</dd></div>
-            <div><dt>{result.riders}</dt><dd>close riders checked</dd></div>
+            <div><dt>{result.bikes}</dt><dd>motorcycles found</dd></div>
+            <div><dt>{result.riders}</dt><dd>close riders found</dd></div>
             <div><dt>{result.noHelmet}</dt><dd>confirmed no-helmet cases</dd></div>
             <div><dt>{result.triple}</dt><dd>possible triple riding</dd></div>
           </dl>
