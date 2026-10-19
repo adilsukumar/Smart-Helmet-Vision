@@ -1,26 +1,19 @@
-<p align="center">
-  <img src="assets/helmet-vision-banner.svg" alt="Smart Helmet Vision animated project banner" width="100%" />
-</p>
+<p><picture><source media="(max-width: 600px)" srcset="assets/readme/hero-mobile.svg"/><img src="assets/readme/hero.svg" width="100%" alt="Smart Helmet Vision: internship research, local browser traffic and helmet models, and a Python rule engine. Concept artwork, not a detection screenshot."/></picture></p>
 
-# Smart Helmet Vision
+<p align="center"><a href="#what-is-here">Overview</a> · <a href="#running-the-website">Run the website</a> · <a href="#checking-the-python-logic">Python logic</a> · <a href="#training-direction">Training</a> · <a href="#explore-the-code">Explore</a></p>
 
 This started as an internship research task. I didn't want to submit only a document or a notebook, so I made a small working demo too.
 
 The project watches motorcycles and riders in video and checks three things: helmet use, triple riding and crossing the stop line while the signal is red. The website can now run the two detection models on a video selected from your device. The Python folder is where the camera, tracking and full rule-engine work lives.
 
-<p align="center">
-  <img src="assets/project-icons.svg" width="360" alt="Helmet, riders and signal icons" />
-</p>
+## <img src="assets/readme/icon-helmet.svg" width="30" height="30" alt=""/> What is here
 
-<table>
-  <tr>
-    <td align="center" width="33%"><b>Helmet check</b><br><sub>Waits for the result to stay consistent</sub></td>
-    <td align="center" width="33%"><b>Triple riding</b><br><sub>Associates riders with one bike track</sub></td>
-    <td align="center" width="33%"><b>Signal crossing</b><br><sub>Checks line crossing only during red</sub></td>
-  </tr>
-</table>
+<p><picture><source media="(max-width: 600px)" srcset="assets/readme/architecture-mobile.svg"/><img src="assets/readme/architecture.svg" width="100%" alt="Two distinct paths: browser ONNX traffic and helmet detection, and Python tracking, association, calibrated rules and evidence."/></picture></p>
 
-## What is here
+<p><picture><source media="(max-width: 600px)" srcset="assets/readme/rules-mobile.svg"/><img src="assets/readme/rules.svg" width="100%" alt="The Python rule engine checks helmet use, rider association and calibrated red-light crossing."/></picture></p>
+
+<details>
+<summary><strong>Implementation notes and current demo status</strong></summary>
 
 The first part of the website is a normal video player with a file picker. YOLO11 finds motorcycles and people in the current frame, while a lightweight YOLOv8n helmet model predicts `With Helmet` or `Without Helmet`. The boxes are drawn live in the browser; they are not part of the video. The selected file stays on the device and is not uploaded. The page also keeps five small simulated cases so each rule is easy to test on demand.
 
@@ -41,7 +34,9 @@ The original 80 MB helmet model stalled in some browsers, so I replaced it with 
 
 I also made the live check intentionally conservative. The browser first finds motorcycles at 320 × 320, silently ignores bikes that are too small in the frame, and runs the helmet model only around the nearest close rider group. A visible helmet or no-helmet label needs stronger confidence and the same result in two consecutive checks. Inference runs away from the playback thread and the page checks a new frame about twice per second, so the video can keep playing smoothly. The canvas only shows confirmed green or red helmet results; working boxes and stale results are cleared instead of being left over the next frame. The numbers beside the video are running totals for the current video and reset when another video is selected. Very strong no-helmet detections are tracked separately so one rider adds one case instead of being added on every frame.
 
-## Running the website
+</details>
+
+## <img src="assets/readme/icon-terminal.svg" width="30" height="30" alt=""/> Running the website
 
 You need a recent Node.js version and pnpm.
 
@@ -57,7 +52,9 @@ pnpm build
 pnpm preview
 ```
 
-## Checking the Python logic
+<p><picture><source media="(max-width: 600px)" srcset="assets/readme/models-mobile.svg"/><img src="assets/readme/models.svg" width="100%" alt="Load traffic first, helmet second. Wait for the green Models ready message, then play the sample or select a local video."/></picture></p>
+
+## <img src="assets/readme/icon-test.svg" width="30" height="30" alt=""/> Checking the Python logic
 
 ```bash
 cd backend
@@ -73,7 +70,7 @@ TRIPLE_RIDING
 RED_LIGHT_CROSSING
 ```
 
-## Trying a real video
+## <img src="assets/readme/icon-video.svg" width="30" height="30" alt=""/> Trying a real video
 
 For the quickest test, open the deployed page, wait for the green **Models ready** message, then press play on the built-in sample. You can use **Choose your video** after that. The video remains on your device.
 
@@ -98,7 +95,7 @@ python helmet_system.py \
 
 A normal object-detection model is not enough for helmet compliance, which is why the demo uses a second model. For a fixed junction, camera regions and the stop line can be changed in `backend/traffic_demo.json`. Use `--signal auto` only after setting the signal region for that camera.
 
-## Training direction
+## <img src="assets/readme/icon-data.svg" width="30" height="30" alt=""/> Training direction
 
 I used AI City Challenge 2024 Track 5 as the main dataset reference. The conversion script prepares the annotations for a YOLO-style training setup:
 
@@ -118,7 +115,12 @@ python training.py train \
 
 Training should be done on a laptop GPU or cloud notebook. The smaller exported model can then be measured on the Raspberry Pi for FPS, latency and heat.
 
-## Project layout
+## <img src="assets/readme/icon-docs.svg" width="30" height="30" alt=""/> Explore the code
+
+<p align="center"><a href="src/App.tsx"><img src="assets/readme/doc-0.svg" width="430" alt="Browser interface: Video selection, playback and overlays"/></a> <a href="src/detector.worker.ts"><img src="assets/readme/doc-1.svg" width="430" alt="Inference worker: ONNX model loading and inference"/></a> <a href="backend/helmet_system.py"><img src="assets/readme/doc-2.svg" width="430" alt="Python rule engine: Tracking, associations and event logic"/></a> <a href="backend/training.py"><img src="assets/readme/doc-3.svg" width="430" alt="Training workflow: Dataset conversion and training tools"/></a></p>
+
+<details>
+<summary><strong>Project layout</strong></summary>
 
 ```text
 src/App.tsx                browser demo and page entry
@@ -131,11 +133,20 @@ public/models/                browser-ready ONNX models
 assets/                    two SVG artwork files
 ```
 
-## Deploying it
+</details>
+
+## <img src="assets/readme/icon-browser.svg" width="30" height="30" alt=""/> Deploying it
 
 Push the repository to GitHub, open Vercel, choose **New Project**, and import this repo. Vercel should detect Vite automatically. The build command is `pnpm build` and the output directory is `dist`.
 
-## References I used
+## <img src="assets/readme/icon-review.svg" width="30" height="30" alt=""/> Scope and limitations
+
+<p><picture><source media="(max-width: 600px)" srcset="assets/readme/boundaries-mobile.svg"/><img src="assets/readme/boundaries.svg" width="100%" alt="Selected videos are not uploaded. Signal-crossing rules require camera calibration. Predictions require human review."/></picture></p>
+
+The rule engine is tested, but I am not calling this a finished traffic-enforcement system. Real accuracy numbers need trained weights and test footage from the actual road/camera angle. Any event should go to a person for review; it should not become an automatic challan or an identity-recognition system.
+
+<details>
+<summary><strong>References and attribution</strong></summary>
 
 - [AI City Challenge 2024 — Track 5](https://www.aicitychallenge.org/2024-data-and-evaluation/)
 - [Raspberry Pi AI Camera documentation](https://www.raspberrypi.com/documentation/accessories/ai-camera.html)
@@ -145,6 +156,8 @@ Push the repository to GitHub, open Vercel, choose **New Project**, and import t
 - [Pexels source video by Aamir Somewhere](https://www.pexels.com/video/busy-indian-street-with-traffic-and-motorbikes-34394424/)
 - [Motor Vehicles Act, 1988 — India Code](https://www.indiacode.nic.in/handle/123456789/13700?locale=en)
 
-## One honest limitation
+</details>
 
-The rule engine is tested, but I am not calling this a finished traffic-enforcement system. Real accuracy numbers need trained weights and test footage from the actual road/camera angle. Any event should go to a person for review; it should not become an automatic challan or an identity-recognition system.
+<p><picture><source media="(max-width: 600px)" srcset="assets/readme/closing-mobile.svg"/><img src="assets/readme/closing.svg" width="100%" alt="Smart Helmet Vision: Observe carefully. Review responsibly. A research demo with evidence intended for human review."/></picture></p>
+
+<p align="center"><a href="https://github.com/adilsukumar/Smart-Helmet-Vision/issues">Discuss an improvement</a> · <a href="backend/test_helmet_system.py">Inspect the logic tests</a> · <a href="https://www.adilsukumar.xyz/">Meet the builder</a></p>
