@@ -6,6 +6,8 @@ This started as an internship research task. I didn't want to submit only a docu
 
 The project watches motorcycles and riders in video and checks three things: helmet use, triple riding and crossing the stop line while the signal is red. The website can now run the two detection models on a video selected from your device. The Python folder is where the camera, tracking and full rule-engine work lives.
 
+<a id="what-is-here"></a>
+
 ## <img src="assets/readme/icon-helmet.svg" width="30" height="30" alt=""/> What is here
 
 <p><picture><source media="(max-width: 600px)" srcset="assets/readme/architecture-mobile.svg"/><img src="assets/readme/architecture.svg" width="100%" alt="Two distinct paths: browser ONNX traffic and helmet detection, and Python tracking, association, calibrated rules and evidence."/></picture></p>
@@ -36,6 +38,8 @@ I also made the live check intentionally conservative. The browser first finds m
 
 </details>
 
+<a id="running-the-website"></a>
+
 ## <img src="assets/readme/icon-terminal.svg" width="30" height="30" alt=""/> Running the website
 
 You need a recent Node.js version and pnpm.
@@ -53,6 +57,8 @@ pnpm preview
 ```
 
 <p><picture><source media="(max-width: 600px)" srcset="assets/readme/models-mobile.svg"/><img src="assets/readme/models.svg" width="100%" alt="Load traffic first, helmet second. Wait for the green Models ready message, then play the sample or select a local video."/></picture></p>
+
+<a id="checking-the-python-logic"></a>
 
 ## <img src="assets/readme/icon-test.svg" width="30" height="30" alt=""/> Checking the Python logic
 
@@ -95,6 +101,8 @@ python helmet_system.py \
 
 A normal object-detection model is not enough for helmet compliance, which is why the demo uses a second model. For a fixed junction, camera regions and the stop line can be changed in `backend/traffic_demo.json`. Use `--signal auto` only after setting the signal region for that camera.
 
+<a id="training-direction"></a>
+
 ## <img src="assets/readme/icon-data.svg" width="30" height="30" alt=""/> Training direction
 
 I used AI City Challenge 2024 Track 5 as the main dataset reference. The conversion script prepares the annotations for a YOLO-style training setup:
@@ -114,6 +122,8 @@ python training.py train \
 ```
 
 Training should be done on a laptop GPU or cloud notebook. The smaller exported model can then be measured on the Raspberry Pi for FPS, latency and heat.
+
+<a id="explore-the-code"></a>
 
 ## <img src="assets/readme/icon-docs.svg" width="30" height="30" alt=""/> Explore the code
 
